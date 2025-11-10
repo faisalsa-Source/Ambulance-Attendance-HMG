@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramedic Attendance Submission</title>
+<style>
+body{font-family:system-ui;background:#f4f7fb;margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;}
+.container{background:#fff;padding:24px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.06);width:100%;max-width:400px;}
+h1{text-align:center;color:#2563eb;}
+label{display:block;margin-top:12px;margin-bottom:4px;font-weight:600;}
+input,select,textarea,button{width:100%;padding:10px;border-radius:8px;border:1px solid #d7dbe6;font-size:14px;}
+button{background:#2563eb;color:white;border:none;margin-top:16px;cursor:pointer;font-weight:600;}
+button:hover{background:#1d4ed8;}
+.status{margin-top:12px;color:#2563eb;font-weight:600;text-align:center;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Paramedic Attendance</h1>
+  
+  <label for="station">Station</label>
+  <select id="station"></select>
+
+  <label for="name">Paramedic Name (optional)</label>
+  <input type="text" id="name" placeholder="Your name">
+
+  <label for="contact">Contact Number (optional)</label>
+  <input type="text" id="contact" placeholder="Phone number">
+
+  <label for="onDuty">Ambulances ON Duty</label>
+  <input type="number" id="onDuty" min="0" value="1">
+
+  <label for="offDuty">Ambulances OFF Duty</label>
+  <input type="number" id="offDuty" min="0" value="0">
+
+  <label for="notes">Notes (optional)</label>
+  <textarea id="notes" rows="2" placeholder="Any notes"></textarea>
+
+  <button id="submitBtn">Submit Attendance</button>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+// Load stations from localStorage
+let stations = JSON.parse(localStorage.getItem('stations_v5')) || [];
+const stationSelect = document.getElementById('station');
+
+// Populate station options
+function renderStations(){
+  stationSelect.innerHTML='';
+  stations.forEach(st=>{
+    const opt=document.createElement('option');
+    opt.value=st.id;
+    opt.textContent=`${st.id} — ${st.name}`;
+    stationSelect.appendChild(opt);
+  });
+}
+renderStations();
+
+// Submit attendance
+document.getElementById('submitBtn').addEventListener('click',()=>{
+  const stationId = stationSelect.value;
+  const name = document.getElementById('name').value.trim() || null;
+  const contact = document.getElementById('contact').value.trim() || null;
+  const onDuty = parseInt(document.getElementById('onDuty').value)||0;
+  const offDuty = parseInt(document.getElementById('offDuty').value)||0;
+  const notes = document.getElementById('notes').value.trim() || null;
+  const ts = new Date().toISOString();
+
+  const report = {stationId,name,contact,onDuty,offDuty,notes,ts};
+
+  const reports = JSON.parse(localStorage.getItem('paramedicReports_v4')||'[]');
+  reports.push(report);
+  localStorage.setItem('paramedicReports_v4',JSON.stringify(reports));
+
+  document.getElementById('status').textContent='✅ Attendance submitted!';
+  setTimeout(()=>{document.getElementById('status').textContent='';},3000);
+
+  // Reset inputs
+  document.getElementById('name').value='';
+  document.getElementById('contact').value='';
+  document.getElementById('onDuty').value='1';
+  document.getElementById('offDuty').value='0';
+  document.getElementById('notes').value='';
+});
+</script>
+
+</body>
+</html>
