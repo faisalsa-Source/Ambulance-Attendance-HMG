@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚑 Ambulance Attendance Dashboard</title>
+<style>
+  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; background: #f5f8fc; margin: 0; color: #222; }
+  header { background: #2563eb; color: white; padding:14px 22px; display:flex; justify-content: space-between; align-items:center; }
+  header h1 { font-size:20px; margin:0; }
+  .container { display: grid; grid-template-columns:260px 1fr; height: calc(100vh-60px); }
+  .sidebar { background:#f9fbff; border-right:1px solid #e3e7ef; padding:16px; overflow-y:auto; }
+  .station { padding:8px 10px; margin:4px 0; border-radius:8px; background:white; border:1px solid #e3e7ef; cursor: pointer; transition: background .2s; }
+  .station:hover { background:#eef4ff; }
+  main { padding:20px; overflow-y:auto; }
+  h2 { margin:0 0 10px; }
+  #summary { margin:10px 0 20px; font-weight:600; }
+  table { width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; }
+  th,td { padding:10px 12px; text-align:left; border-bottom:1px solid #e3e7ef; }
+  th { background:#f1f5fb; }
+  .chart-container { margin-top:30px; background:white; border-radius:8px; padding:20px; }
+  #chart { width:100%; height:240px; }
+  .footer { margin-top:20px; font-size:13px; color:#666; }
+  .btn { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:14px; }
+  .btn:hover { background:#1d4ed8; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚑 Ambulance Attendance Dashboard</h1>
+  <button class="btn" onclick="window.print()">🖨️ Print Report</button>
+</header>
+
+<div class="container">
+  <div class="sidebar" id="stationList">Loading stations…</div>
+
+  <main>
+    <h2>Live Attendance</h2>
+    <div id="summary">Loading data…</div>
+    <table id="dataTable">
+      <thead>
+        <tr><th>Station</th><th>Paramedic</th><th>On Duty</th><th>Off Duty</th><th>Notes</th><th>Timestamp</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="chart-container">
+      <canvas id="chart"></canvas>
+    </div>
+
+    <div class="footer">Connected to Google Sheets – updates every 30 seconds.</div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Google Sheet CSV link
+const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdKXyr04AxDnIsSIicxNjt6FZOEjUg1PB1648sZ5LFMtUHhB3kVDmAb2n7FLsSebOj8Y7fdh6adHHj/pub?output=csv";
+
+async function loadSheetData() {
+  try {
+    const res = await fetch(sheetUrl);
+    const text = await res.text();
+    const rows = text.split("\n").map(r => r.split(","));
+    const headers = rows[0];
+    const dataRows = rows.slice(1).filter(r => r[0].trim() !== "");
+
+    const data = dataRows.map(r => ({
+      station: r[0],
+      name: r[1],
+      onDuty: parseInt(r[2] || 0),
+      offDuty: parseInt(r[3] || 0),
+      notes: r[4] || "",
+      time: r[5] || ""
+    }));
+
+    renderDashboard(data);
+  } catch (err) {
+    document.getElementById("summary").textContent = "⚠️ Error loading data.";
+    console.error(err);
+  }
+}
+
+function renderDashboard(data) {
+  const tbody = document.querySelector("#dataTable tbody");
+  const sidebar = document.getElementById("stationList");
+  tbody.innerHTML = "";
+  sidebar.innerHTML = "";
+
+  let totalOn = 0, totalOff = 0;
+  const stations = [...new Set(data.map(r => r.station))].sort();
+
+  stations.forEach(st => {
+    const sEl = document.createElement("div");
+    sEl.className = "station";
+    sEl.textContent = st;
+    sidebar.appendChild(sEl);
+  });
+
+  data.forEach(row => {
+    totalOn += row.onDuty;
+    totalOff += row.offDuty;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.station}</td>
+      <td>${row.name}</td>
+      <td>${row.onDuty}</td>
+      <td>${row.offDuty}</td>
+      <td>${row.notes}</td>
+      <td>${row.time}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("summary").textContent =
+    `Stations: ${stations.length} | ON Duty: ${totalOn} | OFF Duty: ${totalOff}`;
+
+  renderChart(totalOn, totalOff);
+}
+
+let chart;
+function renderChart(on, off) {
+  const ctx = document.getElementById("chart").getContext("2d");
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels: ["On Duty", "Off Duty"],
+      datasets: [{
+        data: [on, off],
+        backgroundColor: ["#10b981", "#ef4444"]
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: "bottom" } }
+    }
+  });
+}
+
+// auto-refresh every 30 seconds
+loadSheetData();
+setInterval(loadSheetData, 30000);
+</script>
+
+</body>
+</html>
