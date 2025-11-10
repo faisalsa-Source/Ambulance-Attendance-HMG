@@ -1,46 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚑 Ambulance Attendance Dashboard</title>
-<style>
-  body { font-family: "Segoe UI", Roboto, Arial, sans-serif; background: #f5f8fc; margin: 0; color: #222; }
-  header { background: #2563eb; color: white; padding:14px 22px; display:flex; justify-content: space-between; align-items:center; }
-  header h1 { font-size:20px; margin:0; }
-  .container { display: grid; grid-template-columns:260px 1fr; height: calc(100vh-60px); }
-  .sidebar { background:#f9fbff; border-right:1px solid #e3e7ef; padding:16px; overflow-y:auto; }
-  .station { padding:8px 10px; margin:4px 0; border-radius:8px; background:white; border:1px solid #e3e7ef; cursor: pointer; transition: background .2s; }
-  .station:hover { background:#eef4ff; }
-  main { padding:20px; overflow-y:auto; }
-  h2 { margin:0 0 10px; }
-  #summary { margin:10px 0 20px; font-weight:600; }
-  table { width:100%; border-collapse:collapse; background:white; border-radius:8px; overflow:hidden; }
-  th,td { padding:10px 12px; text-align:left; border-bottom:1px solid #e3e7ef; }
-  th { background:#f1f5fb; }
-  .chart-container { margin-top:30px; background:white; border-radius:8px; padding:20px; }
-  #chart { width:100%; height:240px; }
-  .footer { margin-top:20px; font-size:13px; color:#666; }
-  .btn { background:#2563eb; color:white; border:none; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:14px; }
-  .btn:hover { background:#1d4ed8; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🚑 Dispatch Dashboard | HMG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      background-color: #f4f6fb;
+      color: #222;
+    }
+    header {
+      background: #1e3a8a;
+      color: #fff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    header button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    header button:hover {
+      background: #1d4ed8;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      height: calc(100vh - 70px);
+    }
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .sidebar h2 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      color: #1e3a8a;
+    }
+    .station {
+      padding: 8px 12px;
+      margin: 4px 0;
+      background: #f9fafb;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+    main {
+      padding: 24px;
+      overflow-y: auto;
+    }
+    h2 {
+      margin-top: 0;
+      color: #1e3a8a;
+      font-size: 18px;
+    }
+    #summary {
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+    th {
+      background: #f3f4f6;
+      font-weight: 600;
+    }
+    tr:hover {
+      background: #f9fafb;
+    }
+    .chart-container {
+      background: #fff;
+      margin-top: 20px;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    .footer {
+      text-align: center;
+      font-size: 13px;
+      color: #666;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
 
 <header>
-  <h1>🚑 Ambulance Attendance Dashboard</h1>
-  <button class="btn" onclick="window.print()">🖨️ Print Report</button>
+  <h1>🚑 Dispatch Dashboard | HMG</h1>
+  <button onclick="window.print()">🖨️ Print Report</button>
 </header>
 
 <div class="container">
-  <div class="sidebar" id="stationList">Loading stations…</div>
+  <aside class="sidebar">
+    <h2>Stations</h2>
+    <div id="stationList">Loading...</div>
+  </aside>
 
   <main>
-    <h2>Live Attendance</h2>
-    <div id="summary">Loading data…</div>
+    <h2>Live Attendance Overview</h2>
+    <div id="summary">Fetching data...</div>
     <table id="dataTable">
       <thead>
-        <tr><th>Station</th><th>Paramedic</th><th>On Duty</th><th>Off Duty</th><th>Notes</th><th>Timestamp</th></tr>
+        <tr>
+          <th>Station</th>
+          <th>Paramedic</th>
+          <th>On Duty</th>
+          <th>Off Duty</th>
+          <th>Notes</th>
+          <th>Last Updated</th>
+        </tr>
       </thead>
       <tbody></tbody>
     </table>
@@ -49,13 +144,13 @@
       <canvas id="chart"></canvas>
     </div>
 
-    <div class="footer">Connected to Google Sheets – updates every 30 seconds.</div>
+    <div class="footer">
+      Connected to Google Sheets — updates automatically every 30 seconds.
+    </div>
   </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Google Sheet CSV link
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdKXyr04AxDnIsSIicxNjt6FZOEjUg1PB1648sZ5LFMtUHhB3kVDmAb2n7FLsSebOj8Y7fdh6adHHj/pub?output=csv";
 
 async function loadSheetData() {
@@ -77,8 +172,8 @@ async function loadSheetData() {
 
     renderDashboard(data);
   } catch (err) {
-    document.getElementById("summary").textContent = "⚠️ Error loading data.";
     console.error(err);
+    document.getElementById("summary").textContent = "⚠️ Error loading data. Please check your sheet link.";
   }
 }
 
@@ -92,10 +187,10 @@ function renderDashboard(data) {
   const stations = [...new Set(data.map(r => r.station))].sort();
 
   stations.forEach(st => {
-    const sEl = document.createElement("div");
-    sEl.className = "station";
-    sEl.textContent = st;
-    sidebar.appendChild(sEl);
+    const div = document.createElement("div");
+    div.className = "station";
+    div.textContent = st;
+    sidebar.appendChild(div);
   });
 
   data.forEach(row => {
@@ -134,15 +229,17 @@ function renderChart(on, off) {
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: "bottom" } }
+      plugins: {
+        legend: { position: "bottom" }
+      }
     }
   });
 }
 
-// auto-refresh every 30 seconds
 loadSheetData();
 setInterval(loadSheetData, 30000);
 </script>
 
 </body>
 </html>
+
