@@ -25,6 +25,7 @@ body{margin:0;font-family:system-ui;background:var(--bg);display:flex;height:100
 .top-bar .btn-print{background:#f59e0b;}
 .top-bar .btn-export{background:var(--primary);}
 .top-bar .btn-clear{background:var(--danger);}
+.top-bar .buttons button:hover{opacity:0.85;}
 .card{background:var(--card-bg);border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.06);border:1px solid var(--border);}
 .snapshot{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;}
 .metric{flex:1;min-width:140px;text-align:center;padding:16px;border-radius:10px;background:#f9fafb;box-shadow:0 2px 6px rgba(0,0,0,0.04);transition: transform 0.2s;}
@@ -101,11 +102,12 @@ tbody tr:hover{background:#eef6ff;}
   </div>
 </section>
 
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <script>
-// Google Sheet CSV URL
-const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdKXyr04AxDnIsSIicxNjt6FZOEjUg1PB1648sZ5LFMtUHhB3kVDmAb2n7FLsSebOj8Y7fdh6adHHj/pub?output=csv";
+// Google Sheet CSV link
+const sheetCSVUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQPo6YXlwm6bQbf_NJLAp7c4tJiyL0cYBq1ISQfSbYcfy7UqMcJaf4xmQJ_t6cU931s2eex6LjvWP0x/pub?output=csv";
 
-// Initial station list
+// Stations initialization
 let stations = [
   {id:'01', name:'SWD'},{id:'02', name:'TAK'},{id:'03', name:'TAK WH'},{id:'04', name:'OLY'},
   {id:'05', name:'RYN'},{id:'06', name:'SHF'},{id:'07', name:'HMR'},{id:'08', name:'QAS'},
@@ -125,71 +127,132 @@ const metricOffDutyEl = document.getElementById('metricOffDuty');
 const sortSelect = document.getElementById('sortSelect');
 let dutyChart;
 
-// Render sidebar
+// --- Render Sidebar ---
 function renderStationList(filter=''){
   stationListEl.innerHTML='';
   stations.filter(st=>st.name.toLowerCase().includes(filter.toLowerCase())).forEach(st=>{
     const li=document.createElement('li');
     li.textContent=`${st.id} — ${st.name}`;
+    li.dataset.id=st.id;
+    li.contentEditable=true;
+    li.addEventListener('input', ()=>{
+      st.name=li.textContent.split('—')[1]?.trim()||st.name;
+      renderDashboard();
+    });
+
+    const removeBtn=document.createElement('button');
+    removeBtn.textContent='❌';
+    removeBtn.style.background='transparent';
+    removeBtn.style.border='none';
+    removeBtn.style.cursor='pointer';
+    removeBtn.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      if(confirm(`Remove station "${st.name}"?`)){
+        stations = stations.filter(s=>s.id!==st.id);
+        stations.forEach((s,i)=>s.id=(i+1).toString().padStart(2,'0'));
+        renderStationList(searchInput.value);
+        renderDashboard();
+      }
+    });
+
+    li.appendChild(removeBtn);
     stationListEl.appendChild(li);
   });
 }
 searchInput.addEventListener('input',()=>renderStationList(searchInput.value));
 
-// Load CSV from Google Sheet
-async function loadSheetData(){
-  const res = await fetch(sheetUrl);
-  const text = await res.text();
-  const rows = text.split('\n').map(r=>r.split(','));
-  const data = rows.slice(1).map(r=>({
-    station: r[0],
-    name: r[1],
-    contact: r[2],
-    onDuty: parseInt(r[3]||0),
-    offDuty: parseInt(r[4]||0),
-    notes: r[5],
-    ts: r[6] || ''
-  }));
-  renderDashboard(data);
+// Add station
+document.getElementById('addStation').addEventListener('click',()=>{
+  const nameInput=document.getElementById('newStationName');
+  const newName=nameInput.value.trim();
+  if(!newName) return alert('Please enter a station name.');
+  const newId=(stations.length+1).toString().padStart(2,'0');
+  stations.push({id:newId,name:newName});
+  nameInput.value='';
+  renderStationList(searchInput.value);
+  renderDashboard();
+});
+
+// --- Fetch Google Sheet Data ---
+async function fetchSheetData(){
+  const res = await fetch(sheetCSVUrl);
+  const csvText = await res.text();
+  return Papa.parse(csvText, {header:true, skipEmptyLines:true}).data;
 }
 
-// Render dashboard
-function renderDashboard(data){
+// --- Render Dashboard ---
+async function renderDashboard(){
+  const reportsRaw = await fetchSheetData();
+  const reports = reportsRaw.map(r=>{
+    return {
+      stationId: stations.find(s=>s.name===r.Station)?.id || '',
+      name: r.Paramedic,
+      contact: r.Contact,
+      onDuty: parseInt(r.ON) || 0,
+      offDuty: parseInt(r.OFF) || 0,
+      notes: r.Notes,
+      ts: new Date(r.Timestamp).getTime() || Date.now()
+    }
+  });
+
+  const latest = new Map();
+  reports.slice().reverse().forEach(r=>latest.set(r.stationId,r));
+
+  let stationsToRender=[...stations];
+  const sortBy=sortSelect.value;
+  stationsToRender.sort((a,b)=>{
+    if(sortBy==='name') return a.name.localeCompare(b.name);
+    if(sortBy==='last'){
+      const aLast=latest.get(a.id)?.ts||0;
+      const bLast=latest.get(b.id)?.ts||0;
+      return bLast-aLast;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
   tbody.innerHTML='';
-  let totalOn=0, totalOff=0;
-  data.forEach(r=>{
-    totalOn+=r.onDuty;
-    totalOff+=r.offDuty;
+  let totalOn=0,totalOff=0;
+  stationsToRender.forEach(st=>{
+    const r=latest.get(st.id);
     const tr=document.createElement('tr');
-    tr.className='row-ok';
-    tr.innerHTML=`<td>${r.station}</td>
-                    <td>${r.name}</td>
-                    <td>${r.contact}</td>
-                    <td>${r.onDuty}</td>
-                    <td>${r.offDuty}</td>
-                    <td>${r.notes}</td>
-                    <td>${r.ts}</td>`;
+    if(r){
+      totalOn+=r.onDuty;
+      totalOff+=r.offDuty;
+      tr.innerHTML=`<td>${st.id} — ${st.name}</td>
+        <td>${r.name||''}</td>
+        <td>${r.contact||''}</td>
+        <td>${r.onDuty}</td>
+        <td>${r.offDuty}</td>
+        <td>${r.notes||''}</td>
+        <td>${new Date(r.ts).toLocaleString()}</td>`;
+    } else {
+      tr.innerHTML=`<td>${st.id} — ${st.name}</td><td>-</td><td>-</td><td>0</td><td>0</td><td>-</td><td>-</td>`;
+    }
     tbody.appendChild(tr);
   });
 
-  metricStationsEl.textContent = data.length;
-  metricOnDutyEl.textContent = totalOn;
-  metricOffDutyEl.textContent = totalOff;
+  metricStationsEl.textContent=stations.length;
+  metricOnDutyEl.textContent=totalOn;
+  metricOffDutyEl.textContent=totalOff;
 
-  const ctx = document.getElementById('dutyChart').getContext('2d');
+  const ctx=document.getElementById('dutyChart').getContext('2d');
   if(dutyChart) dutyChart.destroy();
-  dutyChart = new Chart(ctx,{
+  dutyChart=new Chart(ctx,{
     type:'pie',
-    data:{labels:['ON Duty','OFF Duty'], datasets:[{data:[totalOn,totalOff], backgroundColor:['#22c55e','#dc2626']}]},
+    data:{
+      labels:['ON Duty','OFF Duty'],
+      datasets:[{data:[totalOn,totalOff],backgroundColor:['#22c55e','#dc2626'] }]
+    },
     options:{plugins:{legend:{position:'bottom'}}}
   });
 }
 
-// Refresh every 60 seconds
-loadSheetData();
-setInterval(loadSheetData,60000);
+// Sort listener
+sortSelect.addEventListener('change', renderDashboard);
 
+// Initial render
 renderStationList();
+renderDashboard();
 </script>
 
 </body>
