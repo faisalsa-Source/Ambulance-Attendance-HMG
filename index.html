@@ -42,7 +42,7 @@
     }
     .container {
       display: grid;
-      grid-template-columns: 260px 1fr;
+      grid-template-columns: 280px 1fr;
       height: calc(100vh - 70px);
     }
     .sidebar {
@@ -56,12 +56,44 @@
       margin-bottom: 10px;
       color: #1e3a8a;
     }
-    .station {
-      padding: 8px 12px;
-      margin: 4px 0;
-      background: #f9fafb;
-      border-radius: 6px;
+    .station-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      margin-bottom: 6px;
       border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #f9fafb;
+    }
+    .station-item input {
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      flex: 1;
+      margin-right: 8px;
+    }
+    .station-item input:focus {
+      outline: none;
+      border-bottom: 1px dashed #2563eb;
+    }
+    .station-actions button {
+      background: none;
+      border: none;
+      color: #ef4444;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .add-btn {
+      margin-top: 10px;
+      background: #10b981;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      width: 100%;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
     }
     main {
       padding: 24px;
@@ -121,6 +153,7 @@
   <aside class="sidebar">
     <h2>Stations</h2>
     <div id="stationList">Loading...</div>
+    <button class="add-btn" onclick="addStation()">➕ Add Station</button>
   </aside>
 
   <main>
@@ -152,16 +185,56 @@
 
 <script>
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdKXyr04AxDnIsSIicxNjt6FZOEjUg1PB1648sZ5LFMtUHhB3kVDmAb2n7FLsSebOj8Y7fdh6adHHj/pub?output=csv";
+let stations = JSON.parse(localStorage.getItem("stations_v2")) || [
+  "SWD", "TAK", "TAK WH", "OLY", "RYN", "SHF", "HMR", "QAS",
+  "KBR", "JED-MJD", "JED-FAY", "KRJ", "NRJ", "GDR", "KAEC",
+  "DC", "DQ", "SAB", "Red Sea", "KKIA", "HQ", "Diriyah",
+  "Blvrd Sport", "QAS Clinic", "KOB Clinic", "Riyadh Studio",
+  "JAD Session", "Riyad Session"
+];
+
+function renderStations() {
+  const list = document.getElementById("stationList");
+  list.innerHTML = "";
+  stations.forEach((st, i) => {
+    const div = document.createElement("div");
+    div.className = "station-item";
+    div.innerHTML = `
+      <input value="${st}" onchange="updateStation(${i}, this.value)" />
+      <div class="station-actions">
+        <button onclick="removeStation(${i})">🗑️</button>
+      </div>`;
+    list.appendChild(div);
+  });
+  localStorage.setItem("stations_v2", JSON.stringify(stations));
+}
+
+function addStation() {
+  const name = prompt("Enter new station name:");
+  if (name && name.trim() !== "") {
+    stations.push(name.trim());
+    renderStations();
+  }
+}
+
+function updateStation(index, newName) {
+  stations[index] = newName.trim();
+  localStorage.setItem("stations_v2", JSON.stringify(stations));
+}
+
+function removeStation(index) {
+  if (confirm("Remove this station?")) {
+    stations.splice(index, 1);
+    renderStations();
+  }
+}
 
 async function loadSheetData() {
   try {
     const res = await fetch(sheetUrl);
     const text = await res.text();
     const rows = text.split("\n").map(r => r.split(","));
-    const headers = rows[0];
-    const dataRows = rows.slice(1).filter(r => r[0].trim() !== "");
-
-    const data = dataRows.map(r => ({
+    const data = rows.slice(1).filter(r => r[0].trim() !== "").map(r => ({
       station: r[0],
       name: r[1],
       onDuty: parseInt(r[2] || 0),
@@ -169,48 +242,34 @@ async function loadSheetData() {
       notes: r[4] || "",
       time: r[5] || ""
     }));
-
     renderDashboard(data);
   } catch (err) {
     console.error(err);
-    document.getElementById("summary").textContent = "⚠️ Error loading data. Please check your sheet link.";
+    document.getElementById("summary").textContent = "⚠️ Error loading Google Sheet.";
   }
 }
 
 function renderDashboard(data) {
   const tbody = document.querySelector("#dataTable tbody");
-  const sidebar = document.getElementById("stationList");
   tbody.innerHTML = "";
-  sidebar.innerHTML = "";
-
   let totalOn = 0, totalOff = 0;
-  const stations = [...new Set(data.map(r => r.station))].sort();
 
-  stations.forEach(st => {
-    const div = document.createElement("div");
-    div.className = "station";
-    div.textContent = st;
-    sidebar.appendChild(div);
-  });
-
-  data.forEach(row => {
-    totalOn += row.onDuty;
-    totalOff += row.offDuty;
+  data.forEach(r => {
+    totalOn += r.onDuty;
+    totalOff += r.offDuty;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${row.station}</td>
-      <td>${row.name}</td>
-      <td>${row.onDuty}</td>
-      <td>${row.offDuty}</td>
-      <td>${row.notes}</td>
-      <td>${row.time}</td>
-    `;
+      <td>${r.station}</td>
+      <td>${r.name}</td>
+      <td>${r.onDuty}</td>
+      <td>${r.offDuty}</td>
+      <td>${r.notes}</td>
+      <td>${r.time}</td>`;
     tbody.appendChild(tr);
   });
 
   document.getElementById("summary").textContent =
-    `Stations: ${stations.length} | ON Duty: ${totalOn} | OFF Duty: ${totalOff}`;
-
+    `Total Stations: ${stations.length} | ON Duty: ${totalOn} | OFF Duty: ${totalOff}`;
   renderChart(totalOn, totalOff);
 }
 
@@ -222,24 +281,18 @@ function renderChart(on, off) {
     type: "pie",
     data: {
       labels: ["On Duty", "Off Duty"],
-      datasets: [{
-        data: [on, off],
-        backgroundColor: ["#10b981", "#ef4444"]
-      }]
+      datasets: [{ data: [on, off], backgroundColor: ["#10b981", "#ef4444"] }]
     },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { position: "bottom" }
-      }
-    }
+    options: { plugins: { legend: { position: "bottom" } } }
   });
 }
 
+renderStations();
 loadSheetData();
 setInterval(loadSheetData, 30000);
 </script>
 
 </body>
 </html>
+
 
