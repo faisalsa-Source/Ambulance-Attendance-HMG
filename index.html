@@ -6,8 +6,11 @@
 <title>Dispatcher Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-:root{--primary:#2563eb;--success:#22c55e;--danger:#dc2626;--bg:#f4f7fb;--card-bg:#fff;--border:#e5e7eb;--muted:#6b7280;--highlight:#eef6ff;}
-*{box-sizing:border-box;} body{margin:0;font-family:system-ui;background:var(--bg);display:flex;height:100vh;color:#111;}
+:root{
+  --primary:#2563eb; --success:#22c55e; --danger:#dc2626; --bg:#f4f7fb; --card-bg:#ffffff; --border:#e5e7eb; --muted:#6b7280; --highlight:#eef6ff;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:system-ui;background:var(--bg);display:flex;height:100vh;color:#111;}
 .sidebar{width:280px;background:var(--card-bg);border-right:1px solid var(--border);padding:20px;display:flex;flex-direction:column;}
 .sidebar h2{margin-top:0;color:var(--primary);font-size:20px;}
 .sidebar input{padding:8px 12px;margin-bottom:8px;border:1px solid var(--border);border-radius:6px;font-size:14px;}
@@ -34,6 +37,9 @@ th{background:#f3f4f6;font-weight:600;}
 tbody tr:nth-child(even){background:#f9fafb;}
 tbody tr:hover{background:#eef6ff;}
 .row-ok{background:#ecfdf5 !important;}
+.editable{background:#fff7e6;cursor:text;border-radius:4px;padding:2px;}
+.editable:focus{background:#fff2cc;outline:none;}
+@media(max-width:900px){.snapshot{flex-direction:column;}}
 </style>
 </head>
 <body>
@@ -41,12 +47,22 @@ tbody tr:hover{background:#eef6ff;}
 <aside class="sidebar">
   <h2>Stations</h2>
   <input type="text" id="stationSearch" placeholder="Search stations...">
+  <div style="margin-bottom:12px;">
+    <input type="text" id="newStationName" placeholder="New Station Name" />
+    <button id="addStation" style="margin-top:4px;padding:6px 10px;border:none;border-radius:6px;background:#2563eb;color:white;cursor:pointer;">➕ Add</button>
+  </div>
   <ul id="stationList" class="station-list"></ul>
 </aside>
 
 <section class="main">
   <div class="top-bar">
     <h1>Dispatcher Dashboard</h1>
+    <div class="buttons">
+      <button id="saveChanges" class="btn-save">💾 Save</button>
+      <button id="printReport" class="btn-print">🖨 Print</button>
+      <button id="exportJson" class="btn-export">📦 Export JSON</button>
+      <button id="clearLocal" class="btn-clear">🗑 Clear</button>
+    </div>
   </div>
 
   <div class="snapshot">
@@ -56,6 +72,15 @@ tbody tr:hover{background:#eef6ff;}
     <div class="card" style="flex:1;min-width:200px;">
       <canvas id="dutyChart" width="200" height="200"></canvas>
     </div>
+  </div>
+
+  <div style="margin-bottom:10px; display:flex; align-items:center; gap:10px;">
+    <label for="sortSelect"><strong>Sort by:</strong></label>
+    <select id="sortSelect">
+      <option value="id">Station ID</option>
+      <option value="name">Station Name</option>
+      <option value="last">Last Reported</option>
+    </select>
   </div>
 
   <div class="card">
@@ -77,51 +102,95 @@ tbody tr:hover{background:#eef6ff;}
 </section>
 
 <script>
+// Google Sheet CSV URL
 const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdKXyr04AxDnIsSIicxNjt6FZOEjUg1PB1648sZ5LFMtUHhB3kVDmAb2n7FLsSebOj8Y7fdh6adHHj/pub?output=csv";
 
+// Initial station list
+let stations = [
+  {id:'01', name:'SWD'},{id:'02', name:'TAK'},{id:'03', name:'TAK WH'},{id:'04', name:'OLY'},
+  {id:'05', name:'RYN'},{id:'06', name:'SHF'},{id:'07', name:'HMR'},{id:'08', name:'QAS'},
+  {id:'09', name:'KBR'},{id:'10', name:'JED-MJD'},{id:'11', name:'JED-FAY'},{id:'12', name:'KRJ'},
+  {id:'13', name:'NRJ'},{id:'14', name:'GDR'},{id:'15', name:'KAEC'},{id:'16', name:'DC'},
+  {id:'17', name:'DQ'},{id:'18', name:'SAB'},{id:'19', name:'Red Sea'},{id:'20', name:'KKIA'},
+  {id:'21', name:'HQ'},{id:'22', name:'Diriyah'},{id:'23', name:'Blvrd Sport'},{id:'24', name:'QAS Clinic'},
+  {id:'25', name:'KOB Clinic'},{id:'26', name:'Riyadh Studio'},{id:'27', name:'JAD Session'},{id:'28', name:'Riyad Session'}
+];
+
+const stationListEl = document.getElementById('stationList');
+const searchInput = document.getElementById('stationSearch');
+const tbody = document.querySelector('#dashboardTable tbody');
+const metricStationsEl = document.getElementById('metricStations');
+const metricOnDutyEl = document.getElementById('metricOnDuty');
+const metricOffDutyEl = document.getElementById('metricOffDuty');
+const sortSelect = document.getElementById('sortSelect');
+let dutyChart;
+
+// Render sidebar
+function renderStationList(filter=''){
+  stationListEl.innerHTML='';
+  stations.filter(st=>st.name.toLowerCase().includes(filter.toLowerCase())).forEach(st=>{
+    const li=document.createElement('li');
+    li.textContent=`${st.id} — ${st.name}`;
+    stationListEl.appendChild(li);
+  });
+}
+searchInput.addEventListener('input',()=>renderStationList(searchInput.value));
+
+// Load CSV from Google Sheet
 async function loadSheetData(){
   const res = await fetch(sheetUrl);
   const text = await res.text();
-  const rows = text.split("\n").map(r=>r.split(","));
+  const rows = text.split('\n').map(r=>r.split(','));
   const data = rows.slice(1).map(r=>({
-    station:r[0],name:r[1],contact:r[2],onDuty:parseInt(r[3]||0),offDuty:parseInt(r[4]||0),ts:r[5]
+    station: r[0],
+    name: r[1],
+    contact: r[2],
+    onDuty: parseInt(r[3]||0),
+    offDuty: parseInt(r[4]||0),
+    notes: r[5],
+    ts: r[6] || ''
   }));
   renderDashboard(data);
 }
 
-const tbody = document.querySelector("#dashboardTable tbody");
-const metricStationsEl=document.getElementById("metricStations");
-const metricOnDutyEl=document.getElementById("metricOnDuty");
-const metricOffDutyEl=document.getElementById("metricOffDuty");
-let dutyChart;
-
+// Render dashboard
 function renderDashboard(data){
-  tbody.innerHTML="";
-  let totalOn=0,totalOff=0;
+  tbody.innerHTML='';
+  let totalOn=0, totalOff=0;
   data.forEach(r=>{
     totalOn+=r.onDuty;
     totalOff+=r.offDuty;
-    const tr=document.createElement("tr");
-    tr.className="row-ok";
-    tr.innerHTML=`<td>${r.station}</td><td>${r.name}</td><td>${r.contact}</td><td>${r.onDuty}</td><td>${r.offDuty}</td><td>${r.notes||''}</td><td>${r.ts}</td>`;
+    const tr=document.createElement('tr');
+    tr.className='row-ok';
+    tr.innerHTML=`<td>${r.station}</td>
+                    <td>${r.name}</td>
+                    <td>${r.contact}</td>
+                    <td>${r.onDuty}</td>
+                    <td>${r.offDuty}</td>
+                    <td>${r.notes}</td>
+                    <td>${r.ts}</td>`;
     tbody.appendChild(tr);
   });
 
-  metricStationsEl.textContent=data.length;
-  metricOnDutyEl.textContent=totalOn;
-  metricOffDutyEl.textContent=totalOff;
+  metricStationsEl.textContent = data.length;
+  metricOnDutyEl.textContent = totalOn;
+  metricOffDutyEl.textContent = totalOff;
 
-  const ctx=document.getElementById("dutyChart").getContext("2d");
+  const ctx = document.getElementById('dutyChart').getContext('2d');
   if(dutyChart) dutyChart.destroy();
-  dutyChart=new Chart(ctx,{
-    type:"pie",
-    data:{labels:["ON Duty","OFF Duty"],datasets:[{data:[totalOn,totalOff],backgroundColor:["#22c55e","#dc2626"]}]},
-    options:{plugins:{legend:{position:"bottom"}}}
+  dutyChart = new Chart(ctx,{
+    type:'pie',
+    data:{labels:['ON Duty','OFF Duty'], datasets:[{data:[totalOn,totalOff], backgroundColor:['#22c55e','#dc2626']}]},
+    options:{plugins:{legend:{position:'bottom'}}}
   });
 }
 
+// Refresh every 60 seconds
 loadSheetData();
 setInterval(loadSheetData,60000);
+
+renderStationList();
 </script>
+
 </body>
 </html>
