@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramedic Attendance Submission</title>
+<style>
+  body {font-family: system-ui; background: #f4f7fb; margin:0; padding:0; display:flex; justify-content:center; align-items:center; height:100vh;}
+  .container {background:#fff; padding:20px 30px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.1); width:320px;}
+  h1 {margin-top:0; font-size:20px; color:#2563eb; text-align:center;}
+  label {display:block; margin:12px 0 4px;}
+  input, select {width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:14px;}
+  button {margin-top:16px; width:100%; padding:10px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600;}
+  button:hover {background:#1d4ed8;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🚑 Paramedic Attendance</h1>
+
+  <label for="station">Station</label>
+  <select id="station">
+    <option value="SWD">SWD</option>
+    <option value="TAK">TAK</option>
+    <option value="TAK WH">TAK WH</option>
+    <option value="OLY">OLY</option>
+    <option value="RYN">RYN</option>
+    <option value="SHF">SHF</option>
+    <option value="HMR">HMR</option>
+    <option value="QAS">QAS</option>
+    <option value="KBR">KBR</option>
+    <option value="JED-MJD">JED-MJD</option>
+    <option value="JED-FAY">JED-FAY</option>
+    <option value="KRJ">KRJ</option>
+    <option value="NRJ">NRJ</option>
+    <option value="GDR">GDR</option>
+    <option value="KAEC">KAEC</option>
+    <option value="DC">DC</option>
+    <option value="DQ">DQ</option>
+    <option value="SAB">SAB</option>
+    <option value="Red Sea">Red Sea</option>
+    <option value="KKIA">KKIA</option>
+    <option value="HQ">HQ</option>
+    <option value="Diriyah">Diriyah</option>
+    <option value="Blvrd Sport">Blvrd Sport</option>
+    <option value="QAS Clinic">QAS Clinic</option>
+    <option value="KOB Clinic">KOB Clinic</option>
+    <option value="Riyadh Studio">Riyadh Studio</option>
+    <option value="JAD Session">JAD Session</option>
+    <option value="Riyad Session">Riyad Session</option>
+  </select>
+
+  <label for="paramedicName">Paramedic Name (optional)</label>
+  <input type="text" id="paramedicName" placeholder="Ahmed">
+
+  <label for="onDuty">Ambulances ON Duty</label>
+  <input type="number" id="onDuty" value="1" min="0">
+
+  <label for="offDuty">Ambulances OFF Duty</label>
+  <input type="number" id="offDuty" value="0" min="0">
+
+  <label for="notes">Notes (optional)</label>
+  <input type="text" id="notes" placeholder="Short note">
+
+  <button id="submitBtn">Submit Attendance</button>
+  <p id="status" style="margin-top:10px; text-align:center;"></p>
+</div>
+
+<script>
+const formURL = "https://docs.google.com/forms/d/e/1FAIpQLSdeixcbbZ2pa4JTuixFXXBpJgI3rh4rH5PwxRE_OBLDVeeVDw/formResponse";
+
+// TODO: Replace entry IDs with your Form field IDs (use Chrome inspector on your form)
+const entryIDs = {
+  station: "entry.1111111111",
+  name: "entry.2222222222",
+  onDuty: "entry.3333333333",
+  offDuty: "entry.4444444444",
+  notes: "entry.5555555555"
+};
+
+document.getElementById('submitBtn').addEventListener('click',()=>{
+  const data = new URLSearchParams();
+  data.append(entryIDs.station, document.getElementById('station').value);
+  data.append(entryIDs.name, document.getElementById('paramedicName').value);
+  data.append(entryIDs.onDuty, document.getElementById('onDuty').value);
+  data.append(entryIDs.offDuty, document.getElementById('offDuty').value);
+  data.append(entryIDs.notes, document.getElementById('notes').value);
+
+  fetch(formURL, {method:'POST', body:data, mode:'no-cors'})
+    .then(()=>{ document.getElementById('status').textContent="✅ Submitted!"; })
+    .catch(()=>{ document.getElementById('status').textContent="⚠ Error submitting"; });
+});
+</script>
+
+</body>
+</html>
