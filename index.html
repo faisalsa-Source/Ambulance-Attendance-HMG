@@ -1,204 +1,435 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dispatcher Dashboard</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Dispatcher Dashboard — Live</title>
+
+<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- PapaParse for robust CSV parsing -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
 <style>
-:root {
-  --primary: #2563eb;
-  --success: #22c55e;
-  --danger: #dc2626;
-  --bg: #f4f7fb;
-  --card-bg: #ffffff;
-  --border: #e5e7eb;
-  --muted: #6b7280;
+:root{
+  --primary:#2563eb; --success:#22c55e; --danger:#dc2626;
+  --bg:#f4f7fb; --card:#fff; --border:#e5e7eb; --muted:#556;
 }
-body {
-  margin: 0;
-  font-family: system-ui;
-  background: var(--bg);
-  color: #111;
-  display: flex;
-  height: 100vh;
-}
-.sidebar {
-  width: 260px;
-  background: var(--card-bg);
-  border-right: 1px solid var(--border);
-  padding: 20px;
-  overflow-y: auto;
-}
-.sidebar h2 {
-  color: var(--primary);
-}
-.main {
-  flex: 1;
-  padding: 20px;
-  overflow: auto;
-}
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.top-bar h1 {
-  color: var(--primary);
-}
-.card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-th, td {
-  padding: 10px;
-  border-bottom: 1px solid var(--border);
-  text-align: center;
-}
-th {
-  background: #f3f4f6;
-}
-tr:nth-child(even) {
-  background: #f9fafb;
-}
-tr:hover {
-  background: #eef6ff;
-}
-.metric {
-  display: inline-block;
-  margin: 0 10px;
-  text-align: center;
-}
-.metric h3 {
-  margin: 0;
-  color: var(--muted);
-}
-.metric p {
-  font-size: 20px;
-  font-weight: bold;
-}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Roboto,Arial;background:var(--bg);color:#111;display:flex;height:100vh}
+.sidebar{width:300px;background:var(--card);border-right:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.sidebar h2{margin:0;color:var(--primary);font-size:18px}
+.controls{display:flex;gap:8px}
+.controls button{padding:8px 10px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer}
+.controls .secondary{background:#10b981}
+.station-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.station-item{padding:10px;border-radius:8px;border:1px solid var(--border);background:#fbfdff}
+.station-item strong{display:block}
+.main{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.topbar{display:flex;justify-content:space-between;align-items:center}
+.topbar h1{margin:0;color:var(--primary)}
+.metrics{display:flex;gap:12px;flex-wrap:wrap}
+.metric{background:var(--card);border:1px solid var(--border);padding:10px 14px;border-radius:10px;text-align:center;min-width:120px}
+.metric h4{margin:0;color:var(--muted);font-size:13px}
+.metric p{margin:6px 0 0;font-size:18px;font-weight:700}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.table-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px;border-bottom:1px solid var(--border);font-size:14px;text-align:center}
+th{background:#f3f4f6}
+tr:nth-child(even){background:#f9fafb}
+tr:hover{background:#eef6ff}
+.small{font-size:13px;color:var(--muted)}
+.btn-row{display:flex;gap:8px}
+.print-btn{background:#f59e0b;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+.refresh-btn{background:var(--primary);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+.export-btn{background:#10b981;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer}
+@media(max-width:900px){.sidebar{width:220px}.metrics{flex-direction:column}}
 </style>
 </head>
 <body>
 
-<aside class="sidebar">
-  <h2>Stations</h2>
-  <ul id="stationList"></ul>
+<aside class="sidebar" aria-label="Stations">
+  <h2>Stations (from sheet)</h2>
+
+  <div class="controls">
+    <button id="refreshNow" class="refresh-btn">🔄 Refresh Now</button>
+    <button id="toggleAuto" class="secondary">Auto: 10s (ON)</button>
+  </div>
+
+  <div style="display:flex;gap:8px;">
+    <button id="exportJson" class="export-btn">📦 Export JSON</button>
+    <button id="printNight" class="print-btn">🖨 Print Night Report</button>
+  </div>
+
+  <div class="small">Search</div>
+  <input id="searchBox" type="search" placeholder="Filter stations..." style="padding:8px;border-radius:8px;border:1px solid var(--border)"/>
+
+  <ul id="stationList" class="station-list" aria-live="polite"></ul>
+
+  <div class="small" style="margin-top:6px;color:var(--muted)">
+    New station names posted to the form/sheet will appear automatically.
+  </div>
 </aside>
 
-<section class="main">
-  <div class="top-bar">
+<main class="main">
+  <div class="topbar">
     <h1>Dispatcher Dashboard</h1>
-    <div class="metric"><h3>Total Stations</h3><p id="metricStations">0</p></div>
-    <div class="metric"><h3>ON Duty</h3><p id="metricOn">0</p></div>
-    <div class="metric"><h3>OFF Duty</h3><p id="metricOff">0</p></div>
+    <div class="small" id="lastUpdated">Last: --</div>
   </div>
 
-  <div class="card">
-    <canvas id="dutyChart"></canvas>
+  <div class="metrics">
+    <div class="metric"><h4>Total unique stations</h4><p id="totalStations">—</p></div>
+    <div class="metric"><h4>Total ON Duty</h4><p id="totalOn">—</p></div>
+    <div class="metric"><h4>Total OFF Duty</h4><p id="totalOff">—</p></div>
+    <div class="card" style="min-width:240px;max-width:360px"><canvas id="pie" width="320" height="220"></canvas></div>
   </div>
 
-  <div class="card">
-    <table id="dataTable">
+  <div class="card table-wrap">
+    <table id="dataTable" aria-label="Attendance table">
       <thead>
         <tr>
           <th>Timestamp</th>
           <th>Station</th>
-          <th>Paramedic</th>
+          <th>Paramedics</th>
           <th>Contact</th>
-          <th>ON Duty</th>
-          <th>OFF Duty</th>
+          <th>ON</th>
+          <th>OFF</th>
           <th>Notes</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
-</section>
+</main>
 
 <script>
-const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQPo6YXlwm6bQbf_NJLAp7c4tJiyL0cYBq1ISQfSbYcfy7UqMcJaf4xmQJ_t6cU931s2eex6LjvWP0x/pub?gid=387799263&single=true&output=csv";
+/* ------------ CONFIG ------------- */
+// your published CSV link (the one you provided)
+let SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQPo6YXlwm6bQbf_NJLAp7c4tJiyL0cYBq1ISQfSbYcfy7UqMcJaf4xmQJ_t6cU931s2eex6LjvWP0x/pub?output=csv";
 
-async function loadData() {
+// auto refresh interval (ms)
+const AUTO_INTERVAL = 10000; // 10 seconds
+let autoTimer = null;
+let autoOn = true;
+
+/* ------------- DOM ---------------- */
+const stationListEl = document.getElementById('stationList');
+const tbody = document.querySelector('#dataTable tbody');
+const totalStationsEl = document.getElementById('totalStations');
+const totalOnEl = document.getElementById('totalOn');
+const totalOffEl = document.getElementById('totalOff');
+const lastUpdatedEl = document.getElementById('lastUpdated');
+const refreshNowBtn = document.getElementById('refreshNow');
+const toggleAutoBtn = document.getElementById('toggleAuto');
+const searchBox = document.getElementById('searchBox');
+const exportJsonBtn = document.getElementById('exportJson');
+const printNightBtn = document.getElementById('printNight');
+let pieChart = null;
+
+/* ------------ Helpers ------------- */
+function parseTimestamp(val){
+  // Try to parse ISO-like strings or common timestamps. Fallback to Date() which may work for Google timestamp.
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) return d;
+  // fallback: treat as raw string
+  return null;
+}
+function uniq(arr){ return [...new Set(arr.filter(x=>x && x.toString().trim() !== ''))]; }
+
+/* ---------- Fetch & Parse CSV (PapaParse) ---------- */
+async function fetchSheet(){
+  // add cache-buster
+  const url = SHEET_CSV + (SHEET_CSV.includes('?') ? '&' : '?') + '_=' + Date.now();
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      error: (err) => reject(err),
+      complete: (res) => resolve(res.data)
+    });
+  });
+}
+
+/* ---------- Build station map ---------- */
+/*
+ stationMap = Map {
+   stationName => {
+     all: [rows],
+     latest: row (newest),
+     aggregated: { names:[], contacts:[], on:sum, off:sum }
+   }
+ }
+*/
+function buildStationMap(rows){
+  const map = new Map();
+  rows.forEach(r => {
+    // tolerant header names (exact headers you confirmed)
+    const tsKey = Object.keys(r).find(k => k && (k.includes('طابع') || /timestamp|time|date/i.test(k)));
+    const stationKey = Object.keys(r).find(k => k && /station/i.test(k)) || 'Station ID/Name';
+    const paramedicKey = Object.keys(r).find(k => k && /paramedic|name/i.test(k)) || 'Paramedic Name';
+    const contactKey = Object.keys(r).find(k => k && /contact/i.test(k)) || 'Contact Number';
+    const onKey = Object.keys(r).find(k => k && /ambulance on|on duty|^on$/i.test(k)) || 'Ambulance ON Duty';
+    const offKey = Object.keys(r).find(k => k && /ambulance off|off duty|^off$/i.test(k)) || 'Ambulance OFF Duty';
+    const notesKey = Object.keys(r).find(k => k && /note/i.test(k)) || 'Notes';
+
+    const station = (r[stationKey] || '').toString().trim() || 'Unknown';
+    const paramedicRaw = (r[paramedicKey] || '').toString().trim();
+    const contactRaw = (r[contactKey] || '').toString().trim();
+    const onNum = parseInt((r[onKey] || '0').toString().replace(/[^\d\-]/g,'')) || 0;
+    const offNum = parseInt((r[offKey] || '0').toString().replace(/[^\d\-]/g,'')) || 0;
+    const notes = (r[notesKey] || '').toString().trim();
+    const tsRaw = (tsKey && r[tsKey]) ? r[tsKey].toString().trim() : '';
+    const ts = parseTimestamp(tsRaw) || new Date();
+
+    const rowObj = { station, paramedicRaw, contactRaw, on: onNum, off: offNum, notes, tsRaw, ts };
+
+    if (!map.has(station)) map.set(station, { all:[], latest:null, aggregated:{ names:[], contacts:[], on:0, off:0 } });
+    const bucket = map.get(station);
+    bucket.all.push(rowObj);
+    // aggregated totals across all submissions (useful)
+    bucket.aggregated.on += onNum;
+    bucket.aggregated.off += offNum;
+
+    // track latest by timestamp
+    if (!bucket.latest || bucket.latest.ts < ts) bucket.latest = rowObj;
+  });
+
+  // dedupe aggregated names/contacts from all rows
+  for (const [k, bucket] of map.entries()){
+    const names = [];
+    const contacts = [];
+    bucket.all.forEach(entry => {
+      // allow multiple paramedic names in one field separated by commas or semicolons or slashes
+      const parts = entry.paramedicRaw.split(/[,;/]+/).map(s=>s.trim()).filter(Boolean);
+      parts.forEach(p => names.push(p));
+      const cparts = entry.contactRaw.split(/[,;/]+/).map(s=>s.trim()).filter(Boolean);
+      cparts.forEach(c => contacts.push(c));
+    });
+    bucket.aggregated.names = uniq(names);
+    bucket.aggregated.contacts = uniq(contacts);
+  }
+
+  return map;
+}
+
+/* ---------- Render UI ---------- */
+function renderSidebar(map){
+  stationListEl.innerHTML = '';
+  const q = (searchBox.value || '').toLowerCase().trim();
+  const stations = Array.from(map.keys()).sort((a,b)=>a.localeCompare(b, undefined, {numeric:true}));
+  stations.forEach(name => {
+    if (q && !name.toLowerCase().includes(q)) return;
+    const bucket = map.get(name);
+    const li = document.createElement('li');
+    li.className = 'station-item';
+    li.innerHTML = `<strong>${name}</strong>
+      <div class="small">${(bucket.aggregated.names.length>0) ? bucket.aggregated.names.join(', ') : '—'}</div>
+      <div class="small">📞 ${(bucket.aggregated.contacts.length>0) ? bucket.aggregated.contacts.join(', ') : '—'}</div>`;
+    li.addEventListener('click', () => {
+      // filter table to this station
+      document.querySelectorAll('.station-item').forEach(el => el.style.outline = '');
+      li.style.outline = '2px solid rgba(37,99,235,0.15)';
+      renderTable(map, name);
+    });
+    stationListEl.appendChild(li);
+  });
+}
+
+function renderTable(map, filterStation=null){
+  tbody.innerHTML = '';
+  const rows = [];
+
+  // prepare one row per latest submission per station (most recent)
+  for (const [station, bucket] of map.entries()){
+    const latest = bucket.latest;
+    if (!latest) continue;
+    rows.push({
+      timestamp: latest.tsRaw || latest.ts.toLocaleString(),
+      station,
+      paramedics: bucket.aggregated.names.join(', ') || latest.paramedicRaw || '—',
+      contact: bucket.aggregated.contacts.join(', ') || latest.contactRaw || '—',
+      on: latest.on || 0,
+      off: latest.off || 0,
+      notes: latest.notes || ''
+    });
+  }
+
+  // optionally filter by station
+  const display = filterStation ? rows.filter(r => r.station === filterStation) : rows;
+
+  // sort by station name
+  display.sort((a,b)=>a.station.localeCompare(b.station, undefined, {numeric:true}));
+
+  // render
+  if (display.length === 0){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="7" class="small">No data</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  display.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(r.timestamp)}</td>
+      <td>${escapeHtml(r.station)}</td>
+      <td style="text-align:left">${escapeHtml(r.paramedics)}</td>
+      <td>${escapeHtml(r.contact)}</td>
+      <td>${r.on}</td>
+      <td>${r.off}</td>
+      <td style="text-align:left">${escapeHtml(r.notes)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateMetrics(map){
+  let totalOn = 0, totalOff = 0;
+  for (const bucket of map.values()){
+    if (bucket.latest) {
+      totalOn += bucket.latest.on || 0;
+      totalOff += bucket.latest.off || 0;
+    }
+  }
+  totalStationsEl.textContent = map.size;
+  totalOnEl.textContent = totalOn;
+  totalOffEl.textContent = totalOff;
+  updatePie(totalOn, totalOff);
+}
+
+function updatePie(on, off){
+  const ctx = document.getElementById('pie').getContext('2d');
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(ctx, {
+    type: 'pie',
+    data: { labels:['ON Duty','OFF Duty'], datasets:[{ data:[on,off], backgroundColor:['#22c55e','#dc2626'] }] },
+    options: { plugins:{legend:{position:'bottom'}} }
+  });
+}
+
+function escapeHtml(s){
+  if (s === null || s === undefined) return '';
+  return s.toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------- Main refresh ---------- */
+let stationsMap = new Map();
+async function refreshAll(){
   try {
-    const res = await fetch(SHEET_URL);
-    const text = await res.text();
-    const rows = text.trim().split("\n").map(r => r.split(","));
-    const headers = rows[0];
-    const data = rows.slice(1);
-
-    const tbody = document.querySelector("#dataTable tbody");
-    tbody.innerHTML = "";
-
-    const stations = new Set();
-    let totalOn = 0;
-    let totalOff = 0;
-
-    data.forEach(row => {
-      const [timestamp, station, name, contact, on, off, notes] = row;
-      stations.add(station);
-      totalOn += parseInt(on || 0);
-      totalOff += parseInt(off || 0);
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${timestamp}</td>
-        <td>${station}</td>
-        <td>${name}</td>
-        <td>${contact}</td>
-        <td>${on}</td>
-        <td>${off}</td>
-        <td>${notes}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-
-    // Update metrics
-    document.getElementById("metricStations").textContent = stations.size;
-    document.getElementById("metricOn").textContent = totalOn;
-    document.getElementById("metricOff").textContent = totalOff;
-
-    // Sidebar stations
-    const stationList = document.getElementById("stationList");
-    stationList.innerHTML = "";
-    [...stations].sort().forEach(st => {
-      const li = document.createElement("li");
-      li.textContent = st;
-      stationList.appendChild(li);
-    });
-
-    // Chart
-    const ctx = document.getElementById("dutyChart").getContext("2d");
-    if (window.chart) window.chart.destroy();
-    window.chart = new Chart(ctx, {
-      type: "pie",
-      data: {
-        labels: ["ON Duty", "OFF Duty"],
-        datasets: [{
-          data: [totalOn, totalOff],
-          backgroundColor: ["#22c55e", "#dc2626"]
-        }]
-      },
-      options: { plugins: { legend: { position: "bottom" } } }
-    });
-
+    refreshNowBtn.disabled = true;
+    refreshNowBtn.textContent = '⏳';
+    const rows = await fetchSheet();
+    // build map
+    stationsMap = buildStationMap(rows);
+    // render UI
+    renderSidebar(stationsMap);
+    renderTable(stationsMap);
+    updateMetrics(stationsMap);
+    lastUpdatedEl.textContent = 'Last: ' + new Date().toLocaleTimeString();
   } catch (err) {
-    console.error("Failed to load data:", err);
+    console.error('refresh failed', err);
+    alert('Failed to load sheet. Check publish settings & link.');
+  } finally {
+    refreshNowBtn.disabled = false;
+    refreshNowBtn.textContent = '🔄 Refresh Now';
   }
 }
 
-loadData();
-setInterval(loadData, 60000); // auto-refresh every 1 min
-</script>
+/* ---------- Export JSON (latest per station) ---------- */
+function exportJson(){
+  const out = [];
+  for (const [name, bucket] of stationsMap.entries()){
+    const latest = bucket.latest;
+    out.push({
+      station: name,
+      paramedics: bucket.aggregated.names,
+      contacts: bucket.aggregated.contacts,
+      on: latest?.on || 0,
+      off: latest?.off || 0,
+      timestamp: latest?.tsRaw || ''
+    });
+  }
+  const blob = new Blob([JSON.stringify(out,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'latest_by_station.json';
+  a.click();
+}
 
+/* ---------- Print Night Report ---------- */
+/*
+Format required:
+
+🚑 Paramedics for Night *Date*
+
+⸻🔴Units On Duty🔴———
+
+🏥 *Station Name*
+•*number on duty* :On Duty
+
+--------------------------
+TOTAL ON DUTY ✅ *Number*
+*/
+function printNightReport(){
+  // Use latest per station for the on-duty numbers
+  const dateStr = new Date().toLocaleDateString('en-GB'); // dd/mm/yyyy per example
+  let totalOn = 0;
+  let lines = [];
+  lines.push(`🚑 Paramedics for Night ${dateStr}\n`);
+  lines.push('⸻🔴Units On Duty🔴———\n');
+
+  for (const [station, bucket] of stationsMap.entries()){
+    const latest = bucket.latest;
+    const on = latest?.on || 0;
+    totalOn += on;
+    lines.push(`🏥 ${station}`);
+    lines.push(`• ${on} :On Duty\n`);
+  }
+
+  lines.push('\n--------------------------');
+  lines.push(`TOTAL ON DUTY ✅ ${totalOn}`);
+
+  const reportText = lines.join('\n');
+  // open print window
+  const w = window.open('','_blank','width=700,height=900');
+  w.document.write(`<pre style="font-family:system-ui,Arial; font-size:16px; white-space:pre-wrap;">${escapeHtml(reportText)}</pre>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+/* ---------- Controls ---------- */
+refreshNowBtn.addEventListener('click', refreshAll);
+exportJsonBtn.addEventListener('click', exportJson);
+printNightBtn.addEventListener('click', printNightReport);
+
+toggleAutoBtn.addEventListener('click', ()=>{
+  autoOn = !autoOn;
+  if (autoOn) {
+    startAuto();
+    toggleAutoBtn.textContent = 'Auto: 10s (ON)';
+  } else {
+    stopAuto();
+    toggleAutoBtn.textContent = 'Auto: OFF';
+  }
+});
+
+searchBox.addEventListener('input', ()=> renderSidebar(stationsMap));
+
+/* ---------- Auto refresh control ---------- */
+function startAuto(){
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(refreshAll, AUTO_INTERVAL);
+}
+function stopAuto(){
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = null;
+}
+
+/* ---------- Init ---------- */
+refreshAll();
+startAuto();
+
+</script>
 </body>
 </html>
