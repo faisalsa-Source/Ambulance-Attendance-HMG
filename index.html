@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Dispatcher Dashboard — Live</title>
+<title>Dispatcher Dashboard — Live (with Sign Off)</title>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -25,6 +25,7 @@ body{margin:0;font-family:system-ui,Roboto,Arial;background:var(--bg);color:#111
 .station-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
 .station-item{padding:10px;border-radius:8px;border:1px solid var(--border);background:#fbfdff}
 .station-item strong{display:block}
+.station-meta{font-size:13px;color:var(--muted);margin-top:6px}
 .main{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
 .topbar{display:flex;justify-content:space-between;align-items:center}
 .topbar h1{margin:0;color:var(--primary)}
@@ -95,6 +96,7 @@ tr:hover{background:#eef6ff}
           <th>Contact</th>
           <th>ON</th>
           <th>OFF</th>
+          <th>Sign Off Time</th>
           <th>Notes</th>
         </tr>
       </thead>
@@ -129,17 +131,14 @@ let pieChart = null;
 
 /* ------------ Helpers ------------- */
 function parseTimestamp(val){
-  // Try to parse ISO-like strings or common timestamps. Fallback to Date() which may work for Google timestamp.
   const d = new Date(val);
   if (!isNaN(d.getTime())) return d;
-  // fallback: treat as raw string
   return null;
 }
 function uniq(arr){ return [...new Set(arr.filter(x=>x && x.toString().trim() !== ''))]; }
 
 /* ---------- Fetch & Parse CSV (PapaParse) ---------- */
 async function fetchSheet(){
-  // add cache-buster
   const url = SHEET_CSV + (SHEET_CSV.includes('?') ? '&' : '?') + '_=' + Date.now();
   return new Promise((resolve, reject) => {
     Papa.parse(url, {
@@ -153,26 +152,18 @@ async function fetchSheet(){
 }
 
 /* ---------- Build station map ---------- */
-/*
- stationMap = Map {
-   stationName => {
-     all: [rows],
-     latest: row (newest),
-     aggregated: { names:[], contacts:[], on:sum, off:sum }
-   }
- }
-*/
 function buildStationMap(rows){
   const map = new Map();
   rows.forEach(r => {
-    // tolerant header names (exact headers you confirmed)
-    const tsKey = Object.keys(r).find(k => k && (k.includes('طابع') || /timestamp|time|date/i.test(k)));
+    const tsKey = Object.keys(r).find(k => k && (k.toLowerCase().includes('طابع') || /timestamp|time|date/i.test(k)));
     const stationKey = Object.keys(r).find(k => k && /station/i.test(k)) || 'Station ID/Name';
     const paramedicKey = Object.keys(r).find(k => k && /paramedic|name/i.test(k)) || 'Paramedic Name';
     const contactKey = Object.keys(r).find(k => k && /contact/i.test(k)) || 'Contact Number';
     const onKey = Object.keys(r).find(k => k && /ambulance on|on duty|^on$/i.test(k)) || 'Ambulance ON Duty';
     const offKey = Object.keys(r).find(k => k && /ambulance off|off duty|^off$/i.test(k)) || 'Ambulance OFF Duty';
     const notesKey = Object.keys(r).find(k => k && /note/i.test(k)) || 'Notes';
+    // EXACT column for sign off (user said it's "sign off time")
+    const signOffKey = Object.keys(r).find(k => k && k.toLowerCase().trim() === 'sign off time') || Object.keys(r).find(k => k && /sign\s*off|signoff|sign[-_\s]*out|time off duty/i.test(k)) || 'sign off time';
 
     const station = (r[stationKey] || '').toString().trim() || 'Unknown';
     const paramedicRaw = (r[paramedicKey] || '').toString().trim();
@@ -180,35 +171,38 @@ function buildStationMap(rows){
     const onNum = parseInt((r[onKey] || '0').toString().replace(/[^\d\-]/g,'')) || 0;
     const offNum = parseInt((r[offKey] || '0').toString().replace(/[^\d\-]/g,'')) || 0;
     const notes = (r[notesKey] || '').toString().trim();
+    const signOffRaw = (r[signOffKey] || '').toString().trim();
     const tsRaw = (tsKey && r[tsKey]) ? r[tsKey].toString().trim() : '';
     const ts = parseTimestamp(tsRaw) || new Date();
 
-    const rowObj = { station, paramedicRaw, contactRaw, on: onNum, off: offNum, notes, tsRaw, ts };
+    const rowObj = { station, paramedicRaw, contactRaw, on: onNum, off: offNum, notes, tsRaw, ts, signOffRaw };
 
-    if (!map.has(station)) map.set(station, { all:[], latest:null, aggregated:{ names:[], contacts:[], on:0, off:0 } });
+    if (!map.has(station)) map.set(station, { all:[], latest:null, aggregated:{ names:[], contacts:[], on:0, off:0, latestSignOff:'' } });
     const bucket = map.get(station);
     bucket.all.push(rowObj);
-    // aggregated totals across all submissions (useful)
     bucket.aggregated.on += onNum;
     bucket.aggregated.off += offNum;
 
-    // track latest by timestamp
     if (!bucket.latest || bucket.latest.ts < ts) bucket.latest = rowObj;
   });
 
-  // dedupe aggregated names/contacts from all rows
+  // dedupe aggregated names/contacts and capture latest signOff
   for (const [k, bucket] of map.entries()){
     const names = [];
     const contacts = [];
+    let latestSignOff = '';
     bucket.all.forEach(entry => {
-      // allow multiple paramedic names in one field separated by commas or semicolons or slashes
       const parts = entry.paramedicRaw.split(/[,;/]+/).map(s=>s.trim()).filter(Boolean);
       parts.forEach(p => names.push(p));
       const cparts = entry.contactRaw.split(/[,;/]+/).map(s=>s.trim()).filter(Boolean);
       cparts.forEach(c => contacts.push(c));
+      if (entry.signOffRaw && (!latestSignOff || (parseTimestamp(entry.signOffRaw) && (parseTimestamp(entry.signOffRaw) > parseTimestamp(latestSignOff) || !parseTimestamp(latestSignOff))))) {
+        latestSignOff = entry.signOffRaw;
+      }
     });
     bucket.aggregated.names = uniq(names);
     bucket.aggregated.contacts = uniq(contacts);
+    bucket.aggregated.latestSignOff = latestSignOff || '';
   }
 
   return map;
@@ -225,10 +219,10 @@ function renderSidebar(map){
     const li = document.createElement('li');
     li.className = 'station-item';
     li.innerHTML = `<strong>${name}</strong>
-      <div class="small">${(bucket.aggregated.names.length>0) ? bucket.aggregated.names.join(', ') : '—'}</div>
-      <div class="small">📞 ${(bucket.aggregated.contacts.length>0) ? bucket.aggregated.contacts.join(', ') : '—'}</div>`;
+      <div class="station-meta">${(bucket.aggregated.names.length>0) ? bucket.aggregated.names.join(', ') : '—'}</div>
+      <div class="station-meta">📞 ${(bucket.aggregated.contacts.length>0) ? bucket.aggregated.contacts.join(', ') : '—'}</div>
+      <div class="station-meta small">Sign Off: ${(bucket.aggregated.latestSignOff) ? escapeHtml(bucket.aggregated.latestSignOff) : '—'}</div>`;
     li.addEventListener('click', () => {
-      // filter table to this station
       document.querySelectorAll('.station-item').forEach(el => el.style.outline = '');
       li.style.outline = '2px solid rgba(37,99,235,0.15)';
       renderTable(map, name);
@@ -241,7 +235,6 @@ function renderTable(map, filterStation=null){
   tbody.innerHTML = '';
   const rows = [];
 
-  // prepare one row per latest submission per station (most recent)
   for (const [station, bucket] of map.entries()){
     const latest = bucket.latest;
     if (!latest) continue;
@@ -252,20 +245,17 @@ function renderTable(map, filterStation=null){
       contact: bucket.aggregated.contacts.join(', ') || latest.contactRaw || '—',
       on: latest.on || 0,
       off: latest.off || 0,
+      signOff: bucket.aggregated.latestSignOff || latest.signOffRaw || '',
       notes: latest.notes || ''
     });
   }
 
-  // optionally filter by station
   const display = filterStation ? rows.filter(r => r.station === filterStation) : rows;
-
-  // sort by station name
   display.sort((a,b)=>a.station.localeCompare(b.station, undefined, {numeric:true}));
 
-  // render
   if (display.length === 0){
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="7" class="small">No data</td>`;
+    tr.innerHTML = `<td colspan="8" class="small">No data</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -278,6 +268,7 @@ function renderTable(map, filterStation=null){
       <td>${escapeHtml(r.contact)}</td>
       <td>${r.on}</td>
       <td>${r.off}</td>
+      <td>${escapeHtml(r.signOff)}</td>
       <td style="text-align:left">${escapeHtml(r.notes)}</td>`;
     tbody.appendChild(tr);
   });
@@ -319,9 +310,7 @@ async function refreshAll(){
     refreshNowBtn.disabled = true;
     refreshNowBtn.textContent = '⏳';
     const rows = await fetchSheet();
-    // build map
     stationsMap = buildStationMap(rows);
-    // render UI
     renderSidebar(stationsMap);
     renderTable(stationsMap);
     updateMetrics(stationsMap);
@@ -344,6 +333,7 @@ function exportJson(){
       station: name,
       paramedics: bucket.aggregated.names,
       contacts: bucket.aggregated.contacts,
+      signOff: bucket.aggregated.latestSignOff || '',
       on: latest?.on || 0,
       off: latest?.off || 0,
       timestamp: latest?.tsRaw || ''
@@ -357,22 +347,8 @@ function exportJson(){
 }
 
 /* ---------- Print Night Report ---------- */
-/*
-Format required:
-
-🚑 Paramedics for Night *Date*
-
-⸻🔴Units On Duty🔴———
-
-🏥 *Station Name*
-•*number on duty* :On Duty
-
---------------------------
-TOTAL ON DUTY ✅ *Number*
-*/
 function printNightReport(){
-  // Use latest per station for the on-duty numbers
-  const dateStr = new Date().toLocaleDateString('en-GB'); // dd/mm/yyyy per example
+  const dateStr = new Date().toLocaleDateString('en-GB'); // dd/mm/yyyy
   let totalOn = 0;
   let lines = [];
   lines.push(`🚑 Paramedics for Night ${dateStr}\n`);
@@ -390,7 +366,6 @@ function printNightReport(){
   lines.push(`TOTAL ON DUTY ✅ ${totalOn}`);
 
   const reportText = lines.join('\n');
-  // open print window
   const w = window.open('','_blank','width=700,height=900');
   w.document.write(`<pre style="font-family:system-ui,Arial; font-size:16px; white-space:pre-wrap;">${escapeHtml(reportText)}</pre>`);
   w.document.close();
@@ -433,3 +408,4 @@ startAuto();
 </script>
 </body>
 </html>
+
