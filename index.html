@@ -105,7 +105,7 @@ th{background:#f3f4f6}
 
   <div class="controls">
     <button id="refreshNow" class="refresh-btn">🔄 Refresh</button>
-    <button id="toggleAuto">Auto:10s(ON)</button>
+    <button id="toggleAuto" class="refresh-btn">Auto: 10s (ON)</button>
   </div>
 
   <div class="controls">
@@ -136,9 +136,9 @@ th{background:#f3f4f6}
     <table id="dataTable">
       <thead>
         <tr>
-          <th>Station ID / Event name</th>
-          <th>Sign In Time</th>
-          <th>Sign Off Time</th>
+          <th>Station</th>
+          <th>Sign-In Time</th>
+          <th>Sign-Off Time</th>
           <th>ON</th>
           <th>OFF</th>
           <th>Notes</th>
@@ -151,7 +151,9 @@ th{background:#f3f4f6}
 
 <script>
 /* ---------------- CONFIG ---------------- */
-let SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTRZysN6b9Ak0KgpGi9gLqGVlCYf4uewuZTF_vJln5p-eYDKW_aa_gqW0Pj5jighw2GcMetdQABCqJN/pub?output=csv";
+let SHEET_CSV = 
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vTRZysN6b9Ak0KgpGi9gLqGVlCYf4uewuZTF_vJln5p-eYDKW_aa_gqW0Pj5jighw2GcMetdQABCqJN/pub?output=csv";
+
 const AUTO_INTERVAL = 10000;
 
 /* DOM */
@@ -189,16 +191,22 @@ async function fetchSheet(){
   });
 }
 
-/* Build data map */
+/* Build data map with trimmed headers */
 function buildStationMap(rows){
   const map = new Map();
   rows.forEach(r=>{
-    const station = r["Station ID / Event name"]?.trim() || "Unknown";
-    const signIn = r["Sign In Time"]||"";
-    const signOff = r["Sign Off Time"]||"";
-    const on = parseInt(r["Ambulance ON Duty"]||0);
-    const off = parseInt(r["Ambulance OFF Duty"]||0);
-    const notes = r["Notes"]||"";
+    // trim keys to remove spaces
+    const row = {};
+    for(const key in r){
+      row[key.trim()] = r[key];
+    }
+
+    const station = row["Station ID / Event name"]?.trim() || "Unknown";
+    const signIn = row["Sign In Time"]?.trim()||"";
+    const signOff = row["Sign Off Time"]?.trim()||"";
+    const on = parseInt(row["Ambulance ON Duty"]||0);
+    const off = parseInt(row["Ambulance OFF Duty"]||0);
+    const notes = row["Notes"]?.trim()||"";
 
     const entry = {station,signIn,signOff,on,off,notes};
     if(!map.has(station)) map.set(station,[]);
@@ -216,7 +224,7 @@ function renderSidebar(map){
     const li=document.createElement("li");
     li.className="station-item";
     li.textContent=name;
-    li.onclick=()=>renderTable(map,name);
+    li.onclick=()=>{ renderTable(map,name); };
     stationListEl.appendChild(li);
   });
 }
@@ -225,10 +233,12 @@ function renderSidebar(map){
 function renderTable(map, filter=null){
   tbody.innerHTML="";
   const rows=[];
+
   for(const [station,arr] of map.entries()){
     const latest = arr[arr.length-1];
     rows.push(latest);
   }
+
   let display = filter? rows.filter(r=>r.station===filter):rows;
   display.sort((a,b)=>a.station.localeCompare(b.station));
 
@@ -250,14 +260,14 @@ function renderTable(map, filter=null){
 function updateMetrics(map){
   let totalOn=0, totalOff=0;
   for(const arr of map.values()){
-    const latest = arr[arr.length-1];
+    const latest=arr[arr.length-1];
     totalOn+=latest.on;
     totalOff+=latest.off;
   }
 
-  totalStationsEl.textContent = map.size;
-  totalOnEl.textContent = totalOn;
-  totalOffEl.textContent = totalOff;
+  totalStationsEl.textContent=map.size;
+  totalOnEl.textContent=totalOn;
+  totalOffEl.textContent=totalOff;
 
   const ctx=document.getElementById("pie").getContext("2d");
   if(pieChart) pieChart.destroy();
@@ -265,10 +275,7 @@ function updateMetrics(map){
     type:"pie",
     data:{
       labels:["ON","OFF"],
-      datasets:[{
-        data:[totalOn,totalOff],
-        backgroundColor:["#22c55e","#dc2626"]
-      }]
+      datasets:[{data:[totalOn,totalOff],backgroundColor:["#22c55e","#dc2626"]}]
     }
   });
 }
@@ -294,8 +301,8 @@ startAuto();
 document.getElementById("refreshNow").onclick=refreshAll;
 document.getElementById("toggleAuto").onclick=function(){
   autoOn=!autoOn;
-  if(autoOn){ startAuto(); this.textContent="Auto:10s(ON)"; }
-  else { clearInterval(autoTimer); this.textContent="Auto:OFF"; }
+  if(autoOn){ startAuto(); this.textContent="Auto: 10s (ON)"; }
+  else { clearInterval(autoTimer); this.textContent="Auto: OFF"; }
 };
 
 /* Print night report */
@@ -305,7 +312,7 @@ document.getElementById("printNight").onclick=()=>{
   for(const [station,arr] of stationsMap.entries()){
     const r=arr[arr.length-1];
     total+=r.on;
-    txt+=`🏥 ${station}\n• ${r.on} On Duty\n• Sign-In: ${r.signIn}\n• Sign-Off: ${r.signOff}\n\n`;
+    txt+=`🏥 ${r.station}\n• ${r.on} On Duty\n• ${r.off} Off Duty\n• Sign-In: ${r.signIn}\n• Sign-Off: ${r.signOff}\n\n`;
   }
   txt+=`TOTAL ON DUTY: ${total}`;
   const w=window.open("");
