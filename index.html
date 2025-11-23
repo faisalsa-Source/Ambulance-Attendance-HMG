@@ -36,8 +36,10 @@ body{
   color:var(--text);
   display:flex;
   height:100vh;
+  overflow:hidden;
 }
 
+/* SIDEBAR (HIDDEN BY DEFAULT) */
 .sidebar{
   width:300px;
   background:var(--card);
@@ -47,7 +49,20 @@ body{
   flex-direction:column;
   gap:12px;
   overflow:auto;
+
+  position:fixed;
+  top:0;
+  left:-320px;
+  height:100vh;
+
+  transition:0.35s;
+  z-index:20;
 }
+
+.sidebar.open{
+  left:0;
+}
+
 .sidebar h2{margin:0;color:var(--primary);font-size:18px}
 
 .controls{display:flex;gap:8px}
@@ -63,7 +78,23 @@ body{
   cursor:pointer;
 }
 
-.main{flex:1;padding:18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+/* MAIN AREA */
+.main{
+  flex:1;
+  padding:18px;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-left:0;
+  width:100%;
+}
+
+/* OPEN SIDEBAR PUSHES MAIN */
+.sidebar.open + .main{
+  margin-left:300px;
+  transition:0.35s;
+}
 
 .metric{
   background:var(--card);
@@ -78,6 +109,17 @@ body{
   border:1px solid var(--border);
   border-radius:10px;
   padding:14px;
+}
+
+/* TOP BAR BUTTON */
+#menuBtn{
+  background:var(--primary);
+  color:#fff;
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-bottom:10px;
 }
 
 table{
@@ -100,7 +142,8 @@ th{background:#f3f4f6}
 </head>
 <body>
 
-<aside class="sidebar">
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
   <h2>Stations</h2>
 
   <div class="controls">
@@ -120,7 +163,10 @@ th{background:#f3f4f6}
   <ul id="stationList" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"></ul>
 </aside>
 
+<!-- MAIN -->
 <main class="main">
+  <button id="menuBtn">📂 Stations</button>
+
   <h1 style="margin:0;color:var(--primary)">Dispatcher Dashboard</h1>
 
   <div id="lastUpdated" style="margin-bottom:10px;font-size:13px;opacity:.8">Last: --</div>
@@ -150,6 +196,23 @@ th{background:#f3f4f6}
 </main>
 
 <script>
+/* -------------------------------------------------------------------------- */
+/* SIDEBAR TOGGLE */
+/* -------------------------------------------------------------------------- */
+const sidebar = document.getElementById("sidebar");
+const menuBtn = document.getElementById("menuBtn");
+
+menuBtn.onclick = () => {
+  sidebar.classList.toggle("open");
+};
+
+/* CLOSE SIDEBAR WHEN CLICK OUTSIDE (MOBILE FRIENDLY) */
+document.addEventListener("click", (e)=>{
+  if(!sidebar.contains(e.target) && e.target !== menuBtn){
+    sidebar.classList.remove("open");
+  }
+});
+
 /* ---------------- CONFIG ---------------- */
 let SHEET_CSV = 
 "https://docs.google.com/spreadsheets/d/e/2PACX-1vTRZysN6b9Ak0KgpGi9gLqGVlCYf4uewuZTF_vJln5p-eYDKW_aa_gqW0Pj5jighw2GcMetdQABCqJN/pub?output=csv";
@@ -195,7 +258,6 @@ async function fetchSheet(){
 function buildStationMap(rows){
   const map = new Map();
   rows.forEach(r=>{
-    // trim keys to remove spaces
     const row = {};
     for(const key in r){
       row[key.trim()] = r[key];
@@ -204,7 +266,7 @@ function buildStationMap(rows){
     const station = row["Station ID / Event name"]?.trim() || "Unknown";
     const signIn = row["Sign In Time"]?.trim()||"";
     const signOff = row["Sign Off Time"]?.trim()||"";
-    const on = parseInt(row["Ambulance ON Duty"]||0);
+    const on = parseInt(row["Ambblance ON Duty"]||row["Ambulance ON Duty"]||0);
     const off = parseInt(row["Ambulance OFF Duty"]||0);
     const notes = row["Notes"]?.trim()||"";
 
@@ -224,7 +286,7 @@ function renderSidebar(map){
     const li=document.createElement("li");
     li.className="station-item";
     li.textContent=name;
-    li.onclick=()=>{ renderTable(map,name); };
+    li.onclick=()=>{ renderTable(map,name); sidebar.classList.remove("open"); };
     stationListEl.appendChild(li);
   });
 }
@@ -233,7 +295,6 @@ function renderSidebar(map){
 function renderTable(map, filter=null){
   tbody.innerHTML="";
   const rows=[];
-
   for(const [station,arr] of map.entries()){
     const latest = arr[arr.length-1];
     rows.push(latest);
@@ -297,22 +358,21 @@ function startAuto(){
 }
 startAuto();
 
-/* Buttons */
 document.getElementById("refreshNow").onclick=refreshAll;
 document.getElementById("toggleAuto").onclick=function(){
   autoOn=!autoOn;
-  if(autoOn){ startAuto(); this.textContent="Auto: 10s (ON)"; }
-  else { clearInterval(autoTimer); this.textContent="Auto: OFF"; }
+  if(autoOn){ startAuto(); this.textContent="Auto:10s(ON)"; }
+  else { clearInterval(autoTimer); this.textContent="Auto:OFF"; }
 };
 
-/* Print night report */
+/* Printing */
 document.getElementById("printNight").onclick=()=>{
   let txt="🚑 Night Report\n\n";
   let total=0;
   for(const [station,arr] of stationsMap.entries()){
     const r=arr[arr.length-1];
     total+=r.on;
-    txt+=`🏥 ${r.station}\n• ${r.on} On Duty\n• ${r.off} Off Duty\n• Sign-In: ${r.signIn}\n• Sign-Off: ${r.signOff}\n\n`;
+    txt+=`🏥 ${r.station}\n• ${r.on} On Duty\n• ${r.off} Off Duty\n• Sign-In:${r.signIn}\n• Sign-Off:${r.signOff}\n\n`;
   }
   txt+=`TOTAL ON DUTY: ${total}`;
   const w=window.open("");
@@ -320,7 +380,6 @@ document.getElementById("printNight").onclick=()=>{
   w.print();
 };
 
-/* JSON export */
 document.getElementById("exportJson").onclick=()=>{
   const out=[];
   for(const [station,arr] of stationsMap.entries()){
@@ -333,11 +392,10 @@ document.getElementById("exportJson").onclick=()=>{
   a.click();
 };
 
-/* Search */
 searchBox.oninput=()=>renderSidebar(stationsMap);
-
-/* First load */
 refreshAll();
 </script>
+
 </body>
 </html>
+
