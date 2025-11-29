@@ -5,89 +5,156 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Dispatcher Dashboard — Live</title>
 
+<!-- Chart.js & PapaParse -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
 <style>
 :root{
   --primary:#2563eb;
+  --accent:#2563eb;
   --success:#22c55e;
   --danger:#dc2626;
-  --warning:#facc15;
+  --warn:#f59e0b;
   --bg:#f4f7fb;
   --card:#ffffff;
   --text:#111;
   --border:#e5e7eb;
 }
+
+/* dark mode variables */
 .dark{
-  --bg:#0f172a;
-  --card:#1e293b;
-  --text:#f1f5f9;
-  --border:#334155;
+  --bg:#0b1220;
+  --card:#0f1724;
+  --text:#e6eef8;
+  --border:#233043;
+  --primary:#60a5fa;
 }
-body{margin:0;font-family:system-ui,Roboto,Arial;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;}
-.sidebar{width:300px;background:var(--card);border-right:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:12px;overflow:auto;position:fixed;top:0;left:-320px;height:100vh;transition:left .32s ease;z-index:50;}
-.sidebar.open{ left:0; }
-.sidebar h2{margin:0;color:var(--primary);font-size:18px}
-.controls{display:flex;gap:8px;flex-wrap:wrap}
-.controls button{padding:8px 10px;border-radius:8px;border:none;background:var(--primary);color:#fff;cursor:pointer;}
-.station-item{padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);cursor:pointer}
-.container{display:flex;width:100%;height:100vh}
-.main{flex:1;padding:18px;overflow:auto;transition:margin-left .32s ease;margin-left:0;}
-.sidebar.open + .main{margin-left:300px;}
-.metric{background:var(--card);border:1px solid var(--border);padding:10px 14px;border-radius:10px;min-width:120px;}
-.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;}
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px;border-bottom:1px solid var(--border);text-align:center}
-th{background:#f3f4f6}
-.dark th{background:#1e293b}
-#menuBtn{background:var(--primary);color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;margin-bottom:12px;}
-.detail-panel{width:420px;max-width:92vw;background:var(--card);border-left:1px solid var(--border);padding:18px;position:fixed;right:-460px;top:0;height:100vh;overflow:auto;transition:right .32s ease;z-index:60;}
-.detail-panel.open{right:0;}
-.detail-panel h3{margin:6px 0 12px;color:var(--primary)}
-.detail-row{margin:6px 0}
-.kv{font-weight:700}
-.smallBtn{padding:8px 10px;border-radius:8px;border:none;background:#475569;color:#fff;cursor:pointer}
+
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:system-ui,Roboto,Arial;background:var(--bg);color:var(--text);
+  height:100vh;display:flex;overflow:hidden;
+}
+
+/* SIDEBAR (pushes main) */
+#sidebar{
+  position:fixed;
+  left:-340px;
+  top:0;
+  width:340px;
+  height:100vh;
+  padding:18px;
+  background:var(--card);
+  border-right:1px solid var(--border);
+  overflow:auto;
+  transition:left .28s ease;
+  z-index:60;
+}
+#sidebar.open{ left:0; }
+
+/* MAIN area shifts when sidebar open */
+#main{ flex:1; padding:18px; overflow:auto; transition:margin-left .28s ease; margin-left:0; }
+#main.shift{ margin-left:340px; }
+
+/* sidebar content */
+#sidebar h2{ margin:0 0 8px 0; color:var(--primary); font-size:18px;}
+.controls{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.controls button{ padding:8px 10px; border-radius:8px; border:none; background:var(--primary); color:#fff; cursor:pointer; }
+.controls .secondary{ background:#10b981; }
+input[type=search]{ width:100%; padding:8px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px; }
+
+/* station list */
+#stationList{ list-style:none; padding:0; margin:8px 0 0 0; display:flex; flex-direction:column; gap:8px; }
+.station-item{ padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; flex-direction:column; }
+.station-item .meta{ font-size:12px; color:var(--text); opacity:.8; margin-top:6px; display:flex; justify-content:space-between; gap:8px; }
+.station-item.selected{ outline:2px solid rgba(37,99,235,0.18); box-shadow:0 6px 18px rgba(37,99,235,0.04); }
+
+/* top / main */
+.header-row{ display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.metrics{ display:flex; gap:12px; flex-wrap:wrap; margin:12px 0 18px 0; align-items:center; }
+.metric{ background:var(--card); border:1px solid var(--border); padding:10px 14px; border-radius:10px; min-width:140px; display:flex; flex-direction:column; align-items:center; }
+.metric h4{ margin:0; font-size:13px; color:var(--primary); }
+.metric p{ margin:8px 0 0 0; font-size:20px; font-weight:700; }
+
+/* cards/table */
+.card{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; overflow:auto; }
+table{ width:100%; border-collapse:collapse; }
+th,td{ padding:10px; border-bottom:1px solid var(--border); text-align:center; font-size:14px; }
+th{ background:#f3f4f6; font-weight:700; }
+.dark th{ background:#102233; }
+
+/* detail panel (right) */
+.detail-panel{ position:fixed; right:-460px; top:0; height:100vh; width:420px; max-width:92vw; padding:18px; background:var(--card); border-left:1px solid var(--border); transition:right .28s ease; overflow:auto; z-index:70; }
+.detail-panel.open{ right:0; }
+.detail-row{ margin:8px 0; }
+.kv{ font-weight:700; }
+
+/* small buttons */
+#menuBtn{ padding:8px 12px; border-radius:8px; border:none; background:var(--primary); color:#fff; cursor:pointer; margin-bottom:12px; }
+.smallBtn{ padding:8px 10px; border-radius:8px; border:none; background:#475569; color:#fff; cursor:pointer; }
+
+/* responsive */
 @media(max-width:900px){
-  .sidebar{width:88%;left:-90%}
-  .sidebar.open{left:0}
-  .sidebar.open + .main{margin-left:0}
-  .detail-panel{width:100%;right:-100%}
-  .detail-panel.open{right:0}
+  #sidebar{ width:90%; left:-100%; }
+  #sidebar.open{ left:0; }
+  #main.shift{ margin-left:0; }
+  .detail-panel{ width:100%; right:-100%; }
+  .detail-panel.open{ right:0; }
 }
 </style>
 </head>
 <body>
 
-<aside class="sidebar" id="sidebar">
+<!-- SIDEBAR -->
+<aside id="sidebar" aria-label="Stations">
   <h2>Stations</h2>
+
   <div class="controls">
     <button id="refreshNow">🔄 Refresh</button>
-    <button id="toggleAuto">Auto: 10s (ON)</button>
-    <button id="darkMode">🌙 Dark</button>
+    <button id="toggleAuto">Auto: 30s (ON)</button>
+    <button id="darkMode">🌙</button>
     <button id="exportJson">📦 JSON</button>
     <button id="printNight">🖨 Print</button>
   </div>
-  <input id="searchBox" type="search" placeholder="Search stations…" style="padding:8px;border-radius:6px;border:1px solid var(--border)"/>
-  <ul id="stationList" style="list-style:none;padding:0;margin:12px 0 0 0;display:flex;flex-direction:column;gap:8px"></ul>
+
+  <input id="searchBox" type="search" placeholder="Search stations..." />
+
+  <div id="stationList" aria-live="polite"></div>
 </aside>
 
-<div class="container">
-<main class="main" id="main">
-  <button id="menuBtn">📂 Stations</button>
-  <h1 style="margin:6px 0 0 0;color:var(--primary)">Dispatcher Dashboard</h1>
-  <div id="lastUpdated" style="margin:6px 0 12px;font-size:13px;opacity:.8">Last: --</div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap">
-    <div class="metric"><h4 style="margin:0">Total Ambulances ON</h4><p id="totalOn">—</p></div>
-    <div class="metric"><h4 style="margin:0">Total Ambulances OFF</h4><p id="totalOff">—</p></div>
-    <div class="metric"><h4 style="margin:0">Total Ambulances OOS</h4><p id="totalOOS">—</p></div>
-    <div class="card" style="min-width:220px"><canvas id="pie"></canvas></div>
+<!-- MAIN -->
+<div id="main" role="main">
+  <button id="menuBtn" aria-label="Toggle stations">☰ Stations</button>
+
+  <div class="header-row">
+    <h1 style="margin:6px 0 0 0;color:var(--primary)">Dispatcher Dashboard</h1>
+    <div id="lastUpdated" style="font-size:13px;opacity:.8">Last: --</div>
   </div>
+
+  <div class="metrics" role="status" aria-live="polite">
+    <div class="metric">
+      <h4>Total Ambulances ON</h4>
+      <p id="totalOn">—</p>
+    </div>
+    <div class="metric">
+      <h4>Total Ambulances OFF</h4>
+      <p id="totalOff">—</p>
+    </div>
+    <div class="metric">
+      <h4>Total Ambulances OOS</h4>
+      <p id="totalOOS">—</p>
+    </div>
+    <div class="card" style="min-width:220px;max-width:360px">
+      <canvas id="pie" width="320" height="220" aria-label="Ambulance distribution"></canvas>
+    </div>
+  </div>
+
   <div class="card">
-    <table id="dataTable">
+    <table id="dataTable" aria-label="Ambulance table">
       <thead>
         <tr>
-          <th>Station</th>
+          <th style="text-align:left;padding-left:10px">Station</th>
           <th>Amb ON</th>
           <th>Amb OFF</th>
           <th>Amb OOS</th>
@@ -98,139 +165,323 @@ th{background:#f3f4f6}
       <tbody></tbody>
     </table>
   </div>
-</main>
+</div>
 
+<!-- detail panel -->
 <aside class="detail-panel" id="detailPanel" aria-hidden="true">
   <div style="display:flex;justify-content:space-between;align-items:center">
     <h3 id="detailTitle">Station Detail</h3>
     <div>
       <button id="detailPrint" class="smallBtn">🖨 Print</button>
-      <button id="detailClose">✖</button>
+      <button id="detailClose" class="smallBtn">✖</button>
     </div>
   </div>
-  <div id="detailContent"></div>
+  <div id="detailContent" style="margin-top:12px"></div>
 </aside>
-</div>
 
 <script>
+/* ========== CONFIG ========== */
+/* Replace this with your CSV if you want a different sheet */
 const SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQfus1gq3mzES7ddymcU5hylqOrepzbVTV4eCR88GdtOqHrmoUhZVO1hW9l_TFknxfULVtza_nkH8ht/pub?output=csv";
-const AUTO_INTERVAL = 10000;
+/* Auto refresh interval (ms) */
+const AUTO_INTERVAL = 30000; // 30 seconds
 
-const sidebar=document.getElementById('sidebar'), menuBtn=document.getElementById('menuBtn'), detailPanel=document.getElementById('detailPanel'), detailClose=document.getElementById('detailClose'), detailContent=document.getElementById('detailContent'), detailTitle=document.getElementById('detailTitle'), detailPrint=document.getElementById('detailPrint'), tbody=document.querySelector("#dataTable tbody"), stationListEl=document.getElementById("stationList"), totalOnEl=document.getElementById("totalOn"), totalOffEl=document.getElementById("totalOff"), totalOOSel=document.getElementById("totalOOS"), lastUpdatedEl=document.getElementById("lastUpdated"), searchBox=document.getElementById("searchBox");
+/* ========== DOM ========== */
+const sidebar = document.getElementById('sidebar');
+const menuBtn = document.getElementById('menuBtn');
+const main = document.getElementById('main');
+const stationListEl = document.getElementById('stationList');
+const tbody = document.querySelector('#dataTable tbody');
+const lastUpdatedEl = document.getElementById('lastUpdated');
+const totalOnEl = document.getElementById('totalOn');
+const totalOffEl = document.getElementById('totalOff');
+const totalOOSel = document.getElementById('totalOOS');
+const searchBox = document.getElementById('searchBox');
+const refreshNowBtn = document.getElementById('refreshNow');
+const toggleAutoBtn = document.getElementById('toggleAuto');
+const darkModeBtn = document.getElementById('darkMode');
+const exportJsonBtn = document.getElementById('exportJson');
+const printNightBtn = document.getElementById('printNight');
+const detailPanel = document.getElementById('detailPanel');
+const detailContent = document.getElementById('detailContent');
+const detailTitle = document.getElementById('detailTitle');
+const detailClose = document.getElementById('detailClose');
+const detailPrint = document.getElementById('detailPrint');
 
-let pieChart=null, stationsMap=new Map(), autoOn=true, autoTimer=null;
+let stationsMap = new Map();
+let pieChart = null;
+let autoTimer = null;
+let autoOn = true;
+let selectedStation = null;
 
-if(localStorage.getItem("darkMode")==="1") document.body.classList.add("dark");
-document.getElementById("darkMode").onclick = () => {
-  document.body.classList.toggle("dark");
-  localStorage.setItem("darkMode", document.body.classList.contains("dark")?"1":"0");
-};
-menuBtn.addEventListener('click',()=>sidebar.classList.toggle('open'));
-document.addEventListener('click', (e)=>{if(!sidebar.contains(e.target) && e.target!==menuBtn) sidebar.classList.remove('open');});
-
-async function fetchSheet(){
-  const url=SHEET_CSV+"&_="+Date.now();
-  return new Promise((resolve,reject)=>{Papa.parse(url,{download:true,header:true,skipEmptyLines:true,complete:(res)=>resolve(res.data),error:(err)=>reject(err)});});
+/* ========== UTIL ========== */
+function escapeHtml(s){
+  if(s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+/* ========== FETCH + PARSE ========== */
+async function fetchSheet(){
+  // cache-buster
+  const url = SHEET_CSV + (SHEET_CSV.includes('?') ? '&' : '?') + '_=' + Date.now();
+  return new Promise((resolve,reject)=>{
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: res => resolve(res.data),
+      error: err => reject(err)
+    });
+  });
+}
+
+/* Build station map. keys: ZONE NAME (case tolerant). */
 function buildStationMap(rows){
-  const map=new Map();
-  rows.forEach(r=>{
-    const row={};
-    for(const k in r) if(r.hasOwnProperty(k)) row[k.trim()]=r[k];
-    const station=row["ZONE NAME"]?.trim()||"Unknown";
-    const start=row["START TIME"]?.trim()||"";
-    const end=row["END TIME"]?.trim()||"";
-    const ambOn=parseInt(row["AMBULANCES ON DUTY"]||0);
-    const ambOff=parseInt(row["AMBULANCE OFF DUTY"]||0);
-    const ambOOS=parseInt(row["OUT OF SERVICE"]||0);
-    const entry={station,start,end,ambOn,ambOff,ambOOS,row};
-    if(!map.has(station)) map.set(station,[]);
+  const map = new Map();
+  rows.forEach(raw => {
+    // normalize keys (trim)
+    const row = {};
+    for(const k in raw) if(Object.prototype.hasOwnProperty.call(raw,k)) row[k.trim()] = raw[k];
+
+    // map columns permissively to the names you provided
+    const station = (row["ZONE NAME"] || row["Zone Name"] || row["ZONE"] || row["ZONE NAME "] || "Unknown").toString().trim();
+    const date = (row["DATE"] || row["Date"] || "").toString().trim();
+    const start = (row["START TIME"] || row["Start Time"] || row["START TIME "] || "").toString().trim();
+    const end = (row["END TIME"] || row["End Time"] || row["END TIME "] || "").toString().trim();
+    const tl = (row["TL NAME"] || row["TL"] || row["TL NAME "] || "").toString().trim();
+
+    const ambOn = parseInt((row["AMBULANCES ON DUTY"] || row["AMBULANCES ON DUTY "] || row["AMB ON"] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const ambOff = parseInt((row["AMBULANCE OFF DUTY"] || row["AMBULANCE OFF DUTY "] || row["AMB OFF"] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const ambOOS = parseInt((row["OUT OF SERVICE"] || row["OUT OF SERVICE "] || row["Ambulance OOS"] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+
+    const golfOn = parseInt((row["GOLF CARS ON DUTY"] || row["GOLF CARS ON DUTY :"] || row["GOLF CARS ON DUTY "] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const golfOff = parseInt((row["GOLF CARS OFF DUTY"] || row["GOLF CARS OFF DUTY :"] || row["GOLF CARS OFF DUTY "] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const golfOOS = parseInt((row["Golf Cars Out Of Service"] || row["Golf Cars Out Of Service "] || row["Golf Cars Out Of Service"] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+
+    const clinics = parseInt((row["Number of Clinics"] || row["Number of Clinics "] || row["Number of Clinics :"] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const paramedics = parseInt((row["Number of Paramedics"] || row["Number of Paramedics "] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const doctors = parseInt((row["Number of Doctors"] || row["Number of Doctors "] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+    const nurses = parseInt((row["Number of Nurses"] || row["Number of Nurses "] || 0).toString().replace(/[^\d\-]/g,'')) || 0;
+
+    const footed = (row["Total Footed Team"] || row["Total Footed Team "] || row["Total Footed Team "] || row["Total Footed Team"] || row["Total Footed Team"] || 0).toString().trim();
+    const notes = (row["Notes"] || row["Notes "] || row["Notes,"] || "").toString().trim();
+
+    const entry = {
+      station, date, start, end, tl,
+      ambOn, ambOff, ambOOS,
+      golfOn, golfOff, golfOOS,
+      clinics, paramedics, doctors, nurses,
+      footed, notes,
+      rawRow: row
+    };
+
+    if(!map.has(station)) map.set(station, []);
     map.get(station).push(entry);
   });
+
   return map;
 }
 
+/* ========== RENDER ========== */
 function renderSidebar(map){
-  stationListEl.innerHTML='';
-  const q=(searchBox.value||'').toLowerCase().trim();
-  [...map.keys()].sort().forEach(name=>{
+  stationListEl.innerHTML = '';
+  const q = (searchBox.value || '').toLowerCase().trim();
+  const keys = Array.from(map.keys()).sort((a,b)=> a.localeCompare(b, undefined, {numeric:true}));
+  keys.forEach(name=>{
     if(q && !name.toLowerCase().includes(q)) return;
-    const latest=map.get(name)[map.get(name).length-1];
-    const li=document.createElement('li');
-    li.className='station-item';
-    li.innerHTML=`<strong>${name}</strong><div style="font-size:12px;margin-top:6px;color:var(--text);opacity:.8">Amb: ${latest.ambOn}/${latest.ambOff} OOS:${latest.ambOOS}</div>`;
-    li.onclick=()=>{showDetail(name); sidebar.classList.remove('open');};
-    stationListEl.appendChild(li);
+    const latest = map.get(name).slice(-1)[0];
+    const el = document.createElement('div');
+    el.className = 'station-item' + (selectedStation === name ? ' selected' : '');
+    el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center">
+        <strong>${escapeHtml(name)}</strong>
+        <div style="font-size:12px;color:var(--text);opacity:.85">${escapeHtml(latest.start)}</div>
+      </div>
+      <div class="meta">
+        <div>Amb: ${latest.ambOn}/${latest.ambOff} OOS:${latest.ambOOS}</div>
+        <div>Golf: ${latest.golfOn}/${latest.golfOff}</div>
+      </div>`;
+    el.addEventListener('click', ()=> { selectedStation = name; highlightSelected(); showDetail(name); });
+    stationListEl.appendChild(el);
   });
 }
 
 function renderTable(map){
-  tbody.innerHTML='';
-  const rows=[];
+  tbody.innerHTML = '';
+  const rows = [];
   for(const arr of map.values()) rows.push(arr[arr.length-1]);
-  rows.sort((a,b)=> a.station.localeCompare(b.station));
+  rows.sort((a,b)=> a.station.localeCompare(b.station, undefined, {numeric:true}));
   rows.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${r.station}</td><td>${r.ambOn}</td><td>${r.ambOff}</td><td>${r.ambOOS}</td><td>${r.start}</td><td>${r.end}</td>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="text-align:left;padding-left:10px">${escapeHtml(r.station)}</td>
+      <td>${r.ambOn}</td><td>${r.ambOff}</td><td>${r.ambOOS}</td>
+      <td>${escapeHtml(r.start)}</td><td>${escapeHtml(r.end)}</td>`;
+    tr.addEventListener('click', ()=> { selectedStation = r.station; highlightSelected(); showDetail(r.station); });
     tbody.appendChild(tr);
   });
 }
 
 function updateMetrics(map){
-  let totalOn=0,totalOff=0,totalOOS=0;
+  let totalOn=0, totalOff=0, totalOOS=0;
   for(const arr of map.values()){
-    const r=arr[arr.length-1];
-    totalOn+=r.ambOn;
-    totalOff+=r.ambOff;
-    totalOOS+=r.ambOOS;
+    const r = arr[arr.length-1];
+    totalOn += r.ambOn;
+    totalOff += r.ambOff;
+    totalOOS += r.ambOOS;
   }
-  totalOnEl.textContent=totalOn;
-  totalOffEl.textContent=totalOff;
-  totalOOSel.textContent=totalOOS;
-  const ctx=document.getElementById("pie").getContext("2d");
+  totalOnEl.textContent = totalOn;
+  totalOffEl.textContent = totalOff;
+  totalOOSel.textContent = totalOOS;
+  updatePie(totalOn, totalOff, totalOOS);
+}
+
+function updatePie(on, off, oos){
+  const ctx = document.getElementById('pie').getContext('2d');
   if(pieChart) pieChart.destroy();
-  pieChart=new Chart(ctx,{type:'pie',data:{labels:['ON','OFF','OOS'],datasets:[{data:[totalOn,totalOff,totalOOS],backgroundColor:['#22c55e','#dc2626','#facc15']}]},options:{plugins:{legend:{position:'bottom'}}}});
+  pieChart = new Chart(ctx, {
+    type:'pie',
+    data:{
+      labels:['ON','OFF','OOS'],
+      datasets:[{ data:[on,off,oos], backgroundColor:['#22c55e','#ef4444','#f59e0b'] }]
+    },
+    options:{plugins:{legend:{position:'bottom'}}}
+  });
 }
 
+function highlightSelected(){
+  document.querySelectorAll('.station-item').forEach(el=>{
+    el.classList.remove('selected');
+    const strong = el.querySelector('strong');
+    if(strong && strong.innerText === selectedStation) el.classList.add('selected');
+  });
+}
+
+/* detail panel */
 function showDetail(stationName){
-  const bucket=stationsMap.get(stationName);
+  const bucket = stationsMap.get(stationName);
   if(!bucket) return;
-  const r=bucket[bucket.length-1];
-  detailTitle.textContent=stationName;
-  let html='<div style="font-family:system-ui,Arial">';
-  for(const key in r.row){
-    html+=`<div class="detail-row"><strong>${key}:</strong> ${r.row[key]}</div>`;
-  }
-  html+='</div>';
-  detailContent.innerHTML=html;
-  detailPanel.classList.add('open'); detailPanel.setAttribute('aria-hidden','false');
-  detailPrint.onclick=()=>{ const w=window.open('','_blank','width=700,height=900'); w.document.write(`<pre>${detailContent.innerText}</pre>`); w.print(); }
+  const r = bucket[bucket.length-1];
+  detailTitle.textContent = stationName;
+  let html = `<div style="font-family:system-ui,Arial">`;
+  html += `<div class="detail-row"><span class="kv">Date:</span> ${escapeHtml(r.date)}</div>`;
+  html += `<div class="detail-row"><span class="kv">Start Time:</span> ${escapeHtml(r.start)}</div>`;
+  html += `<div class="detail-row"><span class="kv">End Time:</span> ${escapeHtml(r.end)}</div>`;
+  html += `<hr>`;
+  html += `<div class="detail-row"><span class="kv">TL Name:</span> ${escapeHtml(r.tl)}</div>`;
+  html += `<hr>`;
+  html += `<div class="detail-row"><strong>AMBULANCES</strong></div>`;
+  html += `<div class="detail-row">Total On: ${r.ambOn} • Off: ${r.ambOff} • OOS: ${r.ambOOS}</div>`;
+  html += `<hr>`;
+  html += `<div class="detail-row"><strong>GOLF CARS</strong></div>`;
+  html += `<div class="detail-row">On: ${r.golfOn} • Off: ${r.golfOff} • OOS: ${r.golfOOS}</div>`;
+  html += `<hr>`;
+  html += `<div class="detail-row">Clinics: ${r.clinics} • Paramedics: ${r.paramedics}</div>`;
+  html += `<div class="detail-row">Doctors: ${r.doctors} • Nurses: ${r.nurses}</div>`;
+  html += `<div class="detail-row">Total Footed Team: ${escapeHtml(r.footed)}</div>`;
+  html += `<hr>`;
+  html += `<div class="detail-row"><strong>Notes:</strong><div style="margin-top:6px">${escapeHtml(r.notes)}</div></div>`;
+  html += `</div>`;
+  detailContent.innerHTML = html;
+  detailPanel.classList.add('open');
+  detailPanel.setAttribute('aria-hidden','false');
+
+  detailPrint.onclick = () => {
+    const w = window.open('','_blank','width=700,height=900');
+    w.document.write(`<pre style="font-family:system-ui">${escapeHtml(detailContent.innerText)}</pre>`);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
 }
 
-detailClose.addEventListener('click',()=>{detailPanel.classList.remove('open'); detailPanel.setAttribute('aria-hidden','true');});
-
-function renderAll(){renderSidebar(stationsMap); renderTable(stationsMap); updateMetrics(stationsMap); lastUpdatedEl.textContent='Last: '+new Date().toLocaleTimeString();}
-
-async function refreshAll(){try{ const rows=await fetchSheet(); stationsMap=buildStationMap(rows); renderAll(); }catch(e){console.error('fetch failed',e);}}
-
-function startAuto(){if(autoTimer) clearInterval(autoTimer); autoTimer=setInterval(refreshAll,AUTO_INTERVAL);}
-startAuto();
-
-document.getElementById('refreshNow').addEventListener('click',refreshAll);
-document.getElementById('toggleAuto').addEventListener('click',function(){autoOn=!autoOn;if(autoOn){startAuto(); this.textContent='Auto: 10s (ON)';}else{clearInterval(autoTimer);this.textContent='Auto: OFF';}});
-document.getElementById('exportJson').addEventListener('click',()=>{const out=[];for(const arr of stationsMap.values()) out.push(arr[arr.length-1].row); const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='stations.json'; a.click();});
-document.getElementById('printNight').addEventListener('click',()=>{
-  let txt='🚑 Night Report\n\n'; let total=0;
-  for(const arr of stationsMap.values()){const r=arr[arr.length-1];total+=r.ambOn; txt+=`🏥 ${r.station}\n• ${r.ambOn} ON\n• ${r.ambOff} OFF\n• ${r.ambOOS} OOS\n• Start: ${r.start}\n• End: ${r.end}\n\n`;}
-  txt+=`TOTAL ON DUTY: ${total}`; const w=window.open('','_blank','width=700,height=900'); w.document.write(`<pre>${txt}</pre>`); w.print();
+/* ========== CONTROLS ========== */
+menuBtn.addEventListener('click', ()=> {
+  sidebar.classList.toggle('open');
+  main.classList.toggle('shift');
+});
+detailClose.addEventListener('click', ()=> {
+  detailPanel.classList.remove('open');
+  detailPanel.setAttribute('aria-hidden','true');
 });
 
-searchBox.addEventListener('input',()=>renderSidebar(stationsMap));
+/* fetch + render cycle */
+async function refreshAll(){
+  try {
+    refreshNowBtn.disabled = true;
+    refreshNowBtn.textContent = '⏳';
+    const rows = await fetchSheet();
+    stationsMap = buildStationMap(rows);
+    renderSidebar(stationsMap);
+    renderTable(stationsMap);
+    updateMetrics(stationsMap);
+    lastUpdatedEl.textContent = 'Last: ' + new Date().toLocaleTimeString();
+    highlightSelected();
+  } catch(err){
+    console.error('Failed to load sheet', err);
+    // don't overwrite existing data if fetch fails
+  } finally {
+    refreshNowBtn.disabled = false;
+    refreshNowBtn.textContent = '🔄 Refresh';
+  }
+}
 
+/* auto refresh control */
+function startAuto(){
+  if(autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(refreshAll, AUTO_INTERVAL);
+}
+function stopAuto(){
+  if(autoTimer) clearInterval(autoTimer);
+  autoTimer = null;
+}
+toggleAutoBtn.addEventListener('click', function(){
+  autoOn = !autoOn;
+  if(autoOn){ startAuto(); this.textContent = 'Auto: 30s (ON)'; }
+  else { stopAuto(); this.textContent = 'Auto: OFF'; }
+});
+refreshNowBtn.addEventListener('click', refreshAll);
+
+/* dark mode */
+darkModeBtn.addEventListener('click', ()=>{
+  document.body.classList.toggle('dark');
+  localStorage.setItem('darkMode', document.body.classList.contains('dark') ? '1' : '0');
+});
+if(localStorage.getItem('darkMode') === '1') document.body.classList.add('dark');
+
+/* export JSON */
+exportJsonBtn.addEventListener('click', ()=>{
+  const out = [];
+  for(const [k, arr] of stationsMap.entries()){
+    out.push(arr[arr.length-1].rawRow);
+  }
+  const blob = new Blob([JSON.stringify(out,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'stations_latest.json'; a.click();
+});
+
+/* print night */
+printNightBtn.addEventListener('click', ()=>{
+  let txt = `🚑 Night Report — ${new Date().toLocaleDateString()}\n\n`;
+  let totalOn = 0;
+  for(const arr of stationsMap.values()){
+    const r = arr[arr.length-1];
+    totalOn += r.ambOn;
+    txt += `🏥 ${r.station}\n• ${r.ambOn} On Duty\n• ${r.ambOff} Off Duty\n• ${r.ambOOS} OOS\n• Start: ${r.start} • End: ${r.end}\n\n`;
+  }
+  txt += `TOTAL ON DUTY ✅ ${totalOn}`;
+  const w = window.open('','_blank','width=700,height=900');
+  w.document.write(`<pre style="font-family:system-ui">${escapeHtml(txt)}</pre>`);
+  w.document.close();
+  w.print();
+});
+
+/* search */
+searchBox.addEventListener('input', ()=> renderSidebar(stationsMap));
+
+/* initial load */
 refreshAll();
+startAuto();
+
+/* expose for debugging */
+window._stationsMap = stationsMap;
 </script>
 </body>
 </html>
-
-
